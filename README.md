@@ -26,7 +26,10 @@ package. Foundation's existing QGR console wrapper remains Foundation-owned.
 
 ## Development
 
-The pinned tools are Bun 1.4.3, TypeScript 7.0.2, and Node.js 26.11.1.
+The pinned build tools are Bun 1.4.3, TypeScript 7.0.2, and Node.js 26.11.1.
+The package runtime contract supports Node.js `^24.18.0 || ^26.0.0`; CI runs a
+focused Node 24 import/process check while retaining Node 26.11.1 as the build
+toolchain.
 
 ```sh
 npm install

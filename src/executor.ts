@@ -8,7 +8,7 @@ import type {
   RunningProcess,
 } from "./contract.js";
 import { PROCESS_CLEANUP_STEP_MS } from "./contract.js";
-import { ProcessRuntimeError, processError } from "./errors.js";
+import { ProcessRuntimeError, isProcessRuntimeError, processError } from "./errors.js";
 import { decodeCapture, drainCapture } from "./internal/capture.js";
 import { snapshotRequest } from "./internal/input.js";
 
@@ -67,14 +67,16 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       const snapshot = snapshotRequest(request);
       const failure = deferred<FailureState>();
       let failureState: FailureState | undefined;
+      let completionFailure: FailureState | undefined;
       let exitState: Exit | undefined;
       let completionStarted = false;
 
       const beginFailure = (error: ProcessRuntimeError, cause: CompletionCause): void => {
-        if (failureState !== undefined) {
-          return;
+        const state = { error, cause };
+        failureState ??= state;
+        if (cause === "failed") {
+          completionFailure ??= state;
         }
-        failureState = { error, cause };
         failure.resolve(failureState);
       };
 
@@ -109,6 +111,11 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       } catch (cause) {
         if (timer !== undefined) clearTimeout(timer);
         snapshot.signal?.removeEventListener("abort", onAbort);
+        // A cleanup-coded rollback result is authoritative even if cancellation
+        // or a deadline was observed while acquisition was being unwound.
+        if (isProcessRuntimeError(cause) && cause.code === "cleanup") {
+          throw cause;
+        }
         if (failureState !== undefined) {
           throw failureState.error;
         }
@@ -138,6 +145,13 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       const firstObservation = await Promise.race([exitObservation, failureObservation]);
       completionStarted = true;
 
+      // Normal completion removes request controls before owned cleanup. Timeout
+      // and cancellation keep their initiating state through the cleanup window.
+      if (firstObservation.kind === "exit" && failureState === undefined) {
+        if (timer !== undefined) clearTimeout(timer);
+        snapshot.signal?.removeEventListener("abort", onAbort);
+      }
+
       const closeAndSettleCapture = async (): Promise<void> => {
         if ((await wait(captures, PROCESS_CLEANUP_STEP_MS)) !== undefined) {
           return;
@@ -151,7 +165,10 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
           }
         })();
         const settled = await wait(
-          Promise.all([close, captures]).then(() => true),
+          Promise.all([close, captures]).then(() => true).catch((cause) => {
+            closeFailure ??= cause;
+            return true;
+          }),
           PROCESS_CLEANUP_STEP_MS,
         );
         if (settled === undefined) {
@@ -197,24 +214,53 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       }
 
       const [stdoutCapture, stderrCapture] = await captures;
-      let stdout: string;
-      let stderr: string;
+      const decode = (): ProcessRunResult => {
+        const stdout = decodeCapture(stdoutCapture.bytes, snapshot.strictUtf8, "stdout");
+        const stderr = decodeCapture(stderrCapture.bytes, snapshot.strictUtf8, "stderr");
+        if (exitState === undefined) {
+          throw processError("stream", "process exited without an observed result");
+        }
+        return { ...exitState, stdout, stderr };
+      };
+
+      // Timeout is a fixed initiating result: late observations do not replace
+      // it. Capture/completion failure keeps its own reason when it started first.
+      if (failureState?.cause === "timeout" || failureState?.cause === "failed") {
+        throw failureState.error;
+      }
+
+      if (failureState?.cause === "cancelled") {
+        // Cleanup owns physical termination; collect its terminal observation
+        // before applying the fixed post-cancellation precedence.
+        await exitObservation;
+        // Foundation precedence after cancellation: decode failure, then a
+        // recorded completion/capture failure, then independently observed
+        // numeric nonzero. A cancellation-induced signal alone stays cancelled.
+        try {
+          const result = decode();
+          if (completionFailure !== undefined) {
+            throw completionFailure.error;
+          }
+          if (result.exitCode !== null && result.exitCode !== undefined && result.exitCode !== 0) {
+            return result;
+          }
+        } catch (cause) {
+          if (isProcessRuntimeError(cause)) {
+            throw cause;
+          }
+          throw errorFrom(cause, "stream", "captured output could not be decoded");
+        }
+        throw failureState.error;
+      }
+
       try {
-        stdout = decodeCapture(stdoutCapture.bytes, snapshot.strictUtf8, "stdout");
-        stderr = decodeCapture(stderrCapture.bytes, snapshot.strictUtf8, "stderr");
+        return decode();
       } catch (cause) {
-        if (failureState !== undefined) {
-          throw failureState.error;
+        if (isProcessRuntimeError(cause)) {
+          throw cause;
         }
         throw errorFrom(cause, "stream", "captured output could not be decoded");
       }
-      if (failureState !== undefined) {
-        throw failureState.error;
-      }
-      if (exitState === undefined) {
-        throw processError("stream", "process exited without an observed result");
-      }
-      return { ...exitState, stdout, stderr };
     },
   };
 };

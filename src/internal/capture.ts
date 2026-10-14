@@ -63,7 +63,8 @@ export const drainCapture = async (
       }
     }
   } catch (cause) {
-    onProblem(processError("stream", "capture stream failed", cause));
+    // Preserve the stream-specific reason at the executor boundary.
+    onProblem(cause);
   }
   return { bytes: concatBytes(chunks, length), overflow };
 };

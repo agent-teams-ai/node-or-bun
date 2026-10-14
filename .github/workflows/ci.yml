@@ -2,12 +2,31 @@ name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
+  node24-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js 24.18.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.18.0
+      - name: Install pinned development tooling
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build for Node 24 compatibility
+        run: npm run build && npm run build:tests
+      - name: Verify Node 24 imports and process behavior
+        run: npm run verify-node24
+      - name: Run Node conformance on Node 24
+        run: npm run test:node
+
   conformance:
     strategy:
       fail-fast: false

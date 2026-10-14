@@ -16,6 +16,8 @@ export type NodeProcessAdapterOptions = {
 type ExitObservation = {
   readonly exited: Promise<Exit>;
   readonly isTerminal: () => boolean;
+  readonly hasPid: () => boolean;
+  readonly waitForTerminal: (timeoutMs: number) => Promise<boolean>;
 };
 
 const streamOrThrow = (stream: Readable | null, name: string): Readable => {
@@ -27,6 +29,10 @@ const streamOrThrow = (stream: Readable | null, name: string): Readable => {
 
 const observeExit = (child: ChildProcess): ExitObservation => {
   let terminal = false;
+  let terminalResolve!: () => void;
+  const terminalProof = new Promise<void>((resolve) => {
+    terminalResolve = resolve;
+  });
   let settle!: (value: Exit) => void;
   let reject!: (reason: unknown) => void;
   const exited = new Promise<Exit>((resolve, rejectPromise) => {
@@ -37,11 +43,12 @@ const observeExit = (child: ChildProcess): ExitObservation => {
   const onExit = (exitCode: number | null, signal: NodeJS.Signals | null): void => {
     if (terminal) return;
     terminal = true;
+    terminalResolve();
     settle({ exitCode, signal: signal === null ? null : String(signal) });
   };
   const onError = (error: Error): void => {
-    if (terminal) return;
-    terminal = true;
+    // ChildProcess errors may be emitted while a live child remains. They are
+    // observation failures, not proof that the process reached a terminal state.
     reject(processError("launch", "child process observation failed", error));
   };
   child.once("exit", onExit);
@@ -49,43 +56,64 @@ const observeExit = (child: ChildProcess): ExitObservation => {
   return {
     exited,
     isTerminal: () => terminal,
+    hasPid: () => child.pid !== undefined,
+    waitForTerminal: (timeoutMs: number) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      });
+      const settled = terminalProof.then(() => true);
+      return Promise.race([settled, timeout]).finally(() => {
+        if (timer !== undefined) clearTimeout(timer);
+      }) as Promise<boolean>;
+    },
   };
-};
-
-const waitForTerminal = (observation: ExitObservation, timeoutMs: number): Promise<boolean> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<boolean>((resolve) => {
-    timer = setTimeout(() => resolve(false), timeoutMs);
-  });
-  const settled = observation.exited.then(
-    () => true,
-    () => true,
-  );
-  return Promise.race([settled, timeout]).finally(() => {
-    if (timer !== undefined) clearTimeout(timer);
-  }) as Promise<boolean>;
 };
 
 const defaultCleanup = (
   child: ChildProcess,
   cause: CompletionCause,
   observation: ExitObservation,
-): Promise<void> =>
-  cleanupDirectChild({
+): Promise<void> => {
+  if (!observation.hasPid()) {
+    return Promise.reject(processError("cleanup", "child process was never spawned"));
+  }
+  return cleanupDirectChild({
     cause,
     isTerminal: observation.isTerminal,
-    waitForTerminal: (timeoutMs) => waitForTerminal(observation, timeoutMs),
+    waitForTerminal: observation.waitForTerminal,
     terminate: (signal) => {
-      child.kill(signal);
+      if (!child.kill(signal) && !observation.isTerminal()) {
+        throw processError("cleanup", `child process rejected ${signal}`);
+      }
     },
   });
+};
 
 const closeNodeCapture = async (child: ChildProcess): Promise<void> => {
-  for (const stream of [child.stdout, child.stderr]) {
-    if (stream !== null && !stream.destroyed) {
-      stream.destroy();
-    }
-  }
+  const streams = [child.stdout, child.stderr].filter((stream): stream is Readable => stream !== null);
+  await Promise.all(
+    streams.map(
+      (stream) =>
+        new Promise<void>((resolve, reject) => {
+          if (stream.destroyed || stream.closed) {
+            resolve();
+            return;
+          }
+          const onClose = (): void => {
+            stream.off("error", onError);
+            resolve();
+          };
+          const onError = (error: Error): void => {
+            stream.off("close", onClose);
+            reject(error);
+          };
+          stream.once("close", onClose);
+          stream.once("error", onError);
+          stream.destroy();
+        }),
+    ),
+  );
 };
 
 const createRunning = (
@@ -163,7 +191,11 @@ export const createNodeProcessAdapter = (
         const observed = observation ?? observeExit(child);
         let cleanupFailure: unknown;
         try {
-          await (customCleanup ?? ((target, cause) => defaultCleanup(target, cause, observed)))(child, "failed");
+          if (customCleanup !== undefined) {
+            await customCleanup(child, "failed");
+          } else if (observed.hasPid()) {
+            await defaultCleanup(child, "failed", observed);
+          }
         } catch (error) {
           cleanupFailure = error;
         }

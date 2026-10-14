@@ -31,14 +31,20 @@ export const createNodeAdapterFactory: ConformanceAdapterFactory = (mode) => {
         stdio: ["ignore", "pipe", "pipe"],
       });
       retain(child);
-      if (mode === "setup-failure") throw new Error("observer setup");
+      if (mode === "setup-failure" || mode === "setup-cleanup-failure") throw new Error("observer setup");
     },
-    cleanup: mode === "cleanup-failure"
-      ? async (child) => {
-          await killAndAwait(child, "failed");
-          throw new Error("cleanup failed");
-        }
-      : killAndAwait,
+    cleanup:
+      mode === "cleanup-failure"
+        ? async (child) => {
+            await killAndAwait(child, "failed");
+            throw new Error("cleanup failed");
+          }
+        : mode === "setup-cleanup-failure"
+          ? async (child) => {
+              await killAndAwait(child, "failed");
+              throw new Error("setup cleanup failed");
+            }
+          : killAndAwait,
   });
 };
 

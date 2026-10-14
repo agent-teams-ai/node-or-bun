@@ -16,6 +16,7 @@ export type BunProcessAdapterOptions = {
 type ExitObservation = {
   readonly exited: Promise<Exit>;
   readonly isTerminal: () => boolean;
+  readonly waitForTerminal: (timeoutMs: number) => Promise<boolean>;
 };
 
 const signalName = (signal: NodeJS.Signals | number | null): string | null => {
@@ -25,6 +26,10 @@ const signalName = (signal: NodeJS.Signals | number | null): string | null => {
 
 const observeExit = (child: BunChild): ExitObservation => {
   let terminal = false;
+  let terminalResolve!: () => void;
+  const terminalProof = new Promise<void>((resolve) => {
+    terminalResolve = resolve;
+  });
   let settle!: (value: Exit) => void;
   let reject!: (reason: unknown) => void;
   const exited = new Promise<Exit>((resolve, rejectPromise) => {
@@ -36,32 +41,32 @@ const observeExit = (child: BunChild): ExitObservation => {
     () => {
       if (terminal) return;
       terminal = true;
+      terminalResolve();
       settle({
         exitCode: child.exitCode,
         signal: signalName(child.signalCode),
       });
     },
     (error: unknown) => {
-      if (terminal) return;
-      terminal = true;
+      // Bun documents `exited` as resolving when the process exits; a rejection
+      // is an observation error and is not accepted as terminal proof.
       reject(processError("launch", "child process observation failed", error));
     },
   );
-  return { exited, isTerminal: () => terminal };
-};
-
-const waitForTerminal = (observation: ExitObservation, timeoutMs: number): Promise<boolean> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<boolean>((resolve) => {
-    timer = setTimeout(() => resolve(false), timeoutMs);
-  });
-  const settled = observation.exited.then(
-    () => true,
-    () => true,
-  );
-  return Promise.race([settled, timeout]).finally(() => {
-    if (timer !== undefined) clearTimeout(timer);
-  }) as Promise<boolean>;
+  return {
+    exited,
+    isTerminal: () => terminal,
+    waitForTerminal: (timeoutMs: number) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      });
+      const settled = terminalProof.then(() => true);
+      return Promise.race([settled, timeout]).finally(() => {
+        if (timer !== undefined) clearTimeout(timer);
+      }) as Promise<boolean>;
+    },
+  };
 };
 
 const defaultCleanup = (
@@ -72,7 +77,7 @@ const defaultCleanup = (
   cleanupDirectChild({
     cause,
     isTerminal: observation.isTerminal,
-    waitForTerminal: (timeoutMs) => waitForTerminal(observation, timeoutMs),
+    waitForTerminal: observation.waitForTerminal,
     terminate: (signal) => {
       child.kill(signal);
     },
@@ -86,15 +91,25 @@ type StreamCapture = {
 const captureStream = (native: ReadableStream<Uint8Array>): StreamCapture => {
   const reader = native.getReader();
   let closed = false;
+  let released = false;
   let iteratorUsed = false;
-  const close = async (): Promise<void> => {
-    if (closed) return;
-    closed = true;
-    try {
-      await reader.cancel();
-    } finally {
-      reader.releaseLock();
-    }
+  let closePromise: Promise<void> | undefined;
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    reader.releaseLock();
+  };
+  const close = (): Promise<void> => {
+    if (closed && released) return Promise.resolve();
+    closePromise ??= (async () => {
+      closed = true;
+      try {
+        await reader.cancel();
+      } finally {
+        release();
+      }
+    })();
+    return closePromise;
   };
   return {
     stream: {
@@ -108,9 +123,12 @@ const captureStream = (native: ReadableStream<Uint8Array>): StreamCapture => {
             if (closed) return { done: true, value: undefined };
             try {
               const result = await reader.read();
-              return result.done
-                ? { done: true, value: undefined }
-                : { done: false, value: result.value };
+              if (result.done) {
+                closed = true;
+                release();
+                return { done: true, value: undefined };
+              }
+              return { done: false, value: result.value };
             } catch (error) {
               if (closed) return { done: true, value: undefined };
               throw error;
@@ -131,12 +149,15 @@ const createRunning = (
   child: BunChild,
   observation: ExitObservation,
   cleanupHook: BunCleanupHook,
+  captureOwners: StreamCapture[],
 ): RunningProcess => {
   if (!(child.stdout instanceof ReadableStream) || !(child.stderr instanceof ReadableStream)) {
     throw processError("launch", "capture stream was unavailable");
   }
   const stdout = captureStream(child.stdout);
+  captureOwners.push(stdout);
   const stderr = captureStream(child.stderr);
+  captureOwners.push(stderr);
   let cleanupPromise: Promise<void> | undefined;
   let closePromise: Promise<void> | undefined;
   return {
@@ -187,6 +208,7 @@ export const createBunProcessAdapter = (
       let retainedChild: BunChild | undefined;
       let retainCount = 0;
       let observation: ExitObservation | undefined;
+      const captureOwners: StreamCapture[] = [];
       const retain = (child: BunChild): void => {
         retainCount += 1;
         if (retainCount !== 1 || !(child instanceof Object)) {
@@ -209,7 +231,7 @@ export const createBunProcessAdapter = (
           cleanupFailure = error;
         }
         try {
-          await closeBunCapture(child);
+          await closeBunCapture(child, captureOwners);
         } catch (error) {
           cleanupFailure ??= error;
         }
@@ -238,6 +260,7 @@ export const createBunProcessAdapter = (
           retainedChild,
           observed,
           customCleanup ?? ((child, cause) => defaultCleanup(child, cause, observed)),
+          captureOwners,
         );
         return running;
       } catch (cause) {
@@ -247,11 +270,27 @@ export const createBunProcessAdapter = (
   };
 };
 
-const closeBunCapture = async (child: BunChild): Promise<void> => {
-  if (child.stdout instanceof ReadableStream) {
-    await child.stdout.cancel();
+const closeBunCapture = async (
+  child: BunChild,
+  captureOwners: readonly StreamCapture[] = [],
+): Promise<void> => {
+  const errors: unknown[] = [];
+  for (const capture of captureOwners) {
+    try {
+      await capture.close();
+    } catch (error) {
+      errors.push(error);
+    }
   }
-  if (child.stderr instanceof ReadableStream) {
-    await child.stderr.cancel();
+  for (const stream of [child.stdout, child.stderr]) {
+    if (!(stream instanceof ReadableStream) || stream.locked) continue;
+    try {
+      await stream.cancel();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length > 0) {
+    throw errors.length === 1 ? errors[0] : new AggregateError(errors, "native capture closure failed");
   }
 };

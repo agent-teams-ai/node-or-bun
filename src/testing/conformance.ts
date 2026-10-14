@@ -1,4 +1,4 @@
-import type { ProcessAdapter, ProcessRunResult, Request } from "../contract.js";
+import type { CompletionCause, Exit, ProcessAdapter, ProcessRunResult, Request, RunningProcess } from "../contract.js";
 import { ProcessRuntimeError, isProcessRuntimeError, type ProcessErrorCode } from "../errors.js";
 import { createProcessExecutor } from "../executor.js";
 
@@ -6,6 +6,7 @@ export type ConformanceAdapterMode =
   | "normal"
   | "setup-failure"
   | "cleanup-failure"
+  | "setup-cleanup-failure"
   | "pre-retain-failure"
   | "partial-hooks";
 
@@ -65,9 +66,203 @@ const run = async (
   return createProcessExecutor(options.adapterFactory(adapterMode)).run(input);
 };
 
+type Deferred<T> = {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+};
+
+const deferred = <T>(): Deferred<T> => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+};
+
+const delay = (milliseconds: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const syntheticStream = (
+  values: readonly Uint8Array[] = [],
+  failure?: () => Promise<never>,
+): AsyncIterable<Uint8Array> => ({
+  async *[Symbol.asyncIterator]() {
+    for (const value of values) yield value;
+    if (failure !== undefined) await failure();
+  },
+});
+
+const syntheticRunning = (
+  exited: Promise<Exit>,
+  stdout: AsyncIterable<Uint8Array>,
+  stderr: AsyncIterable<Uint8Array>,
+  cleanup: (cause: CompletionCause) => Promise<void>,
+): RunningProcess => ({
+  stdout,
+  stderr,
+  exited,
+  cleanup,
+  closeCapture: async () => undefined,
+});
+
+const syntheticRun = async (
+  running: RunningProcess,
+  request: Request,
+): Promise<ProcessRunResult> =>
+  createProcessExecutor({
+    launch: async () => running,
+  }).run(request);
+
+const expectSyntheticError = async (
+  code: ProcessErrorCode,
+  operation: () => Promise<unknown>,
+): Promise<ProcessRuntimeError> => expectError(code, operation);
+
+const runArbitrationCases = async (): Promise<void> => {
+  const baseRequest: Request = {
+    command: "synthetic",
+    args: [],
+    cwd: ".",
+  };
+
+  // Detects: cancellation must not hide an independently observed numeric exit.
+  {
+    const controller = new AbortController();
+    const exit = deferred<Exit>();
+    const running = syntheticRunning(
+      exit.promise,
+      syntheticStream(),
+      syntheticStream(),
+      async () => {
+        exit.resolve({ exitCode: 17, signal: null });
+      },
+    );
+    const resultPromise = syntheticRun(running, {
+      ...baseRequest,
+      signal: controller.signal,
+    });
+    controller.abort();
+    const result = await resultPromise;
+    assert(result.exitCode === 17, "cancel plus numeric exit did not return the observed Exit fact");
+  }
+
+  // Detects: cancellation must not hide a later capture failure.
+  {
+    const controller = new AbortController();
+    const exit = deferred<Exit>();
+    const running = syntheticRunning(
+      exit.promise,
+      syntheticStream([], async () => {
+        await delay(5);
+        throw new Error("late capture failure");
+      }),
+      syntheticStream(),
+      async () => {
+        exit.resolve({ exitCode: 0, signal: null });
+      },
+    );
+    const resultPromise = syntheticRun(running, {
+      ...baseRequest,
+      signal: controller.signal,
+    });
+    controller.abort();
+    const error = await expectSyntheticError("stream", () => resultPromise);
+    assert(error.message.includes("stdout capture failed"), "cancel plus capture failure lost its capture reason");
+  }
+
+  // Detects: cancellation must not hide a later strict UTF-8 decode failure.
+  {
+    const controller = new AbortController();
+    const exit = deferred<Exit>();
+    const running = syntheticRunning(
+      exit.promise,
+      syntheticStream([new Uint8Array([0xff])]),
+      syntheticStream(),
+      async () => {
+        exit.resolve({ exitCode: 0, signal: null });
+      },
+    );
+    const resultPromise = syntheticRun(running, {
+      ...baseRequest,
+      signal: controller.signal,
+      strictUtf8: true,
+    });
+    controller.abort();
+    await expectSyntheticError("invalid-output", () => resultPromise);
+  }
+
+  // Detects: capture close failure is a cleanup failure and retains incomplete
+  // observation instead of being mistaken for normal EOF.
+  {
+    const never = new Promise<never>(() => undefined);
+    const pendingRunning: RunningProcess = {
+      stdout: { [Symbol.asyncIterator]: () => ({ next: () => never }) },
+      stderr: { [Symbol.asyncIterator]: () => ({ next: () => never }) },
+      exited: Promise.resolve({ exitCode: 0, signal: null }),
+      cleanup: async () => undefined,
+      closeCapture: async () => {
+        throw new Error("native close failed");
+      },
+    };
+    const error = await expectSyntheticError("cleanup", () => syntheticRun(pendingRunning, baseRequest));
+    assert(error.incompleteCustody, "capture close failure did not retain incomplete custody");
+  }
+
+  // Detects: timeout remains the initiating result after late capture failure.
+  {
+    const exit = deferred<Exit>();
+    const running = syntheticRunning(
+      exit.promise,
+      syntheticStream([], async () => {
+        await delay(25);
+        throw new Error("late timeout capture failure");
+      }),
+      syntheticStream(),
+      async () => {
+        exit.resolve({ exitCode: 0, signal: null });
+      },
+    );
+    await expectSyntheticError("timeout", () =>
+      syntheticRun(running, {
+        ...baseRequest,
+        timeoutMs: 5,
+      }),
+    );
+  }
+
+  // Detects: cleanup failure during setup rollback supersedes timeout and keeps
+  // the initiating setup failure plus incomplete-custody fact.
+  {
+    const adapter: ProcessAdapter = {
+      launch: async () => {
+        await delay(20);
+        throw new ProcessRuntimeError("cleanup", "setup cleanup failed", {
+          cause: new Error("cleanup hook failed"),
+          initiatingError: new Error("observer setup failed"),
+          incompleteCustody: true,
+        });
+      },
+    };
+    const error = await expectSyntheticError("cleanup", () =>
+      createProcessExecutor(adapter).run({
+        ...baseRequest,
+        timeoutMs: 5,
+      }),
+    );
+    assert(error.incompleteCustody, "setup cleanup failure lost incomplete custody");
+    assert(
+      error.initiatingError instanceof Error &&
+        error.initiatingError.message === "observer setup failed",
+      "setup cleanup failure lost its initiating setup error",
+    );
+  }
+};
+
 export const runProcessRuntimeConformance = async (
   options: ConformanceOptions,
 ): Promise<void> => {
+  await runArbitrationCases();
+
   const exact = await run(options, "normal", {
     ...request(options, "echo", { args: [options.fixturePath, "echo", "one", "two"] }),
     environment: { EXACT: "yes" },
@@ -176,6 +371,18 @@ export const runProcessRuntimeConformance = async (
 
   await expectError("launch", () =>
     run(options, "setup-failure", request(options, "slow")),
+  );
+
+  // Detects: rollback cleanup failure must win over setup failure and retain
+  // the initiating setup error plus incomplete-custody fact.
+  const setupCleanupFailure = await expectError("cleanup", () =>
+    run(options, "setup-cleanup-failure", request(options, "slow")),
+  );
+  assert(setupCleanupFailure.incompleteCustody, "setup cleanup failure lost incomplete custody");
+  assert(
+    setupCleanupFailure.initiatingError instanceof Error &&
+      setupCleanupFailure.initiatingError.message === "observer setup",
+    `setup cleanup failure lost its initiating setup error: ${String(setupCleanupFailure.initiatingError)}`,
   );
   await expectError("launch", () =>
     run(options, "pre-retain-failure", request(options, "slow")),
