@@ -32,4 +32,7 @@ jobs:
       - name: Qualify the reviewed package
         run: npm run check
       - name: Publish through GitHub OIDC Trusted Publisher
-        run: npm publish --access public --provenance
+        run: |
+          set -- .worker-tmp/pack/*.tgz
+          test "$#" -eq 1
+          npm publish "$1" --access public --provenance
