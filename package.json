@@ -1,0 +1,66 @@
+{
+  "name": "@agent-teams/process-runtime",
+  "version": "0.1.0",
+  "description": "Bounded captured process execution with explicit Node.js and Bun adapters.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agent-teams-ai/process-runtime.git"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/adapters/node.d.ts",
+      "import": "./dist/adapters/node.js"
+    },
+    "./bun": {
+      "types": "./dist/adapters/bun.d.ts",
+      "import": "./dist/adapters/bun.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/conformance.d.ts",
+      "import": "./dist/testing/conformance.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^24.18.0 || ^26.0.0",
+    "bun": ">=1.4.3"
+  },
+  "scripts": {
+    "clean": "node scripts/clean.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.root.json && tsc -p tsconfig.node.json && tsc -p tsconfig.bun.json && tsc -p tsconfig.tests.json",
+    "test": "npm run build && npm run build:tests && npm run test:node && npm run test:bun",
+    "build:tests": "tsc -p tsconfig.test-build.json",
+    "test:node": "node --test dist-tests/tests/conformance.node.test.js dist-tests/tests/native-lifecycle.node.test.js",
+    "test:bun": "bun test ./dist-tests/tests/conformance.bun.test.js ./dist-tests/tests/native-lifecycle.bun.test.js",
+    "test:node-under-bun": "node scripts/run-node-under-bun.ts",
+    "pack": "node scripts/pack.ts",
+    "qualify": "node scripts/qualify-installed-consumer.ts",
+    "verify-toolchain": "node scripts/verify-toolchain.ts",
+    "verify-node24": "node scripts/verify-node-compat.ts",
+    "check": "npm run verify-toolchain && npm run typecheck && npm run test && npm run test:node-under-bun && npm run pack && npm run qualify"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

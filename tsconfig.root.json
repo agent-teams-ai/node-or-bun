@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [],
+    "lib": ["ES2023", "DOM"],
+    "rootDir": "src"
+  },
+  "include": ["src/contract.ts", "src/errors.ts", "src/executor.ts", "src/internal/**/*.ts"]
+}
