@@ -105,6 +105,12 @@ const syntheticRunning = (
   closeCapture: async () => undefined,
 });
 
+const syntheticNeverEndingStream = (): AsyncIterable<Uint8Array> => ({
+  async *[Symbol.asyncIterator]() {
+    await new Promise<never>(() => undefined);
+  },
+});
+
 const syntheticRun = async (
   running: RunningProcess,
   request: Request,
@@ -401,9 +407,36 @@ export const runProcessRuntimeConformance = async (
     "cleanup failure did not retain timeout as its initiating problem",
   );
 
-  await expectError("cleanup", () =>
-    run(options, "normal", request(options, "retained-pipes")),
-  );
+  // A descendant inheriting stdio is not a portable retained-pipe oracle:
+  // Windows/libuv may honestly deliver EOF when the launched child exits.
+  // This deterministic pair instead remains open past both cleanup bounds and
+  // proves that an unclosed reader is never converted into success.
+  {
+    let closeRequested = false;
+    const running: RunningProcess = {
+      stdout: syntheticNeverEndingStream(),
+      stderr: syntheticNeverEndingStream(),
+      exited: Promise.resolve({ exitCode: 0, signal: null }),
+      cleanup: async () => undefined,
+      closeCapture: async () => {
+        closeRequested = true;
+        throw new Error("synthetic native close failed");
+      },
+    };
+    const error = await expectSyntheticError("cleanup", () =>
+      syntheticRun(running, {
+        command: "synthetic",
+        args: [],
+        cwd: ".",
+      }),
+    );
+    assert(closeRequested, "unclosed capture did not reach native close");
+    assert(error.incompleteCustody, "unclosed capture claimed release");
+    assert(
+      error.cause instanceof Error && error.cause.message === "synthetic native close failed",
+      "unclosed capture lost the native close failure",
+    );
+  }
 
   await expectError("timeout", () =>
     run(options, "normal", {

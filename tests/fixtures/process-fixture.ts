@@ -1,5 +1,4 @@
-import { spawn } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 
 const mode = process.argv[2] ?? "";
 const value = process.argv[3] ?? "";
@@ -57,27 +56,6 @@ const main = async (): Promise<void> => {
     case "slow":
       await new Promise((resolve) => setTimeout(resolve, 750));
       return;
-    case "retained-pipes": {
-      const marker = `${process.cwd()}/retained-pipes-ready-${process.pid}`;
-      const child = spawn(
-        process.execPath,
-        [
-          "-e",
-          "require('node:fs').writeFileSync(process.argv[1], 'ready'); setTimeout(() => {}, 2000)",
-          marker,
-        ],
-        { stdio: "inherit" },
-      );
-      child.unref();
-      for (let attempt = 0; attempt < 100 && !existsSync(marker); attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 5));
-      }
-      if (!existsSync(marker)) {
-        throw new Error("retained-pipes child was not ready");
-      }
-      process.exit(0);
-      return;
-    }
     default:
       process.exitCode = 64;
   }
