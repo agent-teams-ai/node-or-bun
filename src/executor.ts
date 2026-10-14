@@ -70,6 +70,7 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       let completionFailure: FailureState | undefined;
       let exitState: Exit | undefined;
       let completionStarted = false;
+      let abnormalCapture = false;
 
       const beginFailure = (error: ProcessRuntimeError, cause: CompletionCause): void => {
         const state = { error, cause };
@@ -124,9 +125,15 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
 
       const stdoutRead = drainCapture(running.stdout, (cause) => {
         beginFailure(errorFrom(cause, "stream", "stdout capture failed"), "failed");
+      }).then((capture) => {
+        if (!capture.normalEof) abnormalCapture = true;
+        return capture;
       });
       const stderrRead = drainCapture(running.stderr, (cause) => {
         beginFailure(errorFrom(cause, "stream", "stderr capture failed"), "failed");
+      }).then((capture) => {
+        if (!capture.normalEof) abnormalCapture = true;
+        return capture;
       });
       const captures = Promise.all([stdoutRead, stderrRead]);
 
@@ -153,9 +160,11 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       }
 
       const closeAndSettleCapture = async (): Promise<void> => {
-        if ((await wait(captures, PROCESS_CLEANUP_STEP_MS)) !== undefined) {
-          return;
+        const initiallySettled = await wait(captures, PROCESS_CLEANUP_STEP_MS);
+        if (initiallySettled !== undefined) {
+          if (initiallySettled.every((capture) => capture.normalEof)) return;
         }
+        const forcedAfterEofDeadline = initiallySettled === undefined && !abnormalCapture;
         let closeFailure: unknown;
         const close = (async () => {
           try {
@@ -180,7 +189,11 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
         if (closeFailure !== undefined) {
           throw cleanupError(closeFailure, failureState?.error);
         }
-        throw cleanupError(new Error("capture EOF was not observed normally"), failureState?.error);
+        if (forcedAfterEofDeadline) {
+          throw cleanupError(new Error("capture EOF deadline elapsed"), failureState?.error);
+        }
+        // Successful routine close after an abnormal read settlement preserves
+        // that stream's initiating failure instead of inventing cleanup failure.
       };
 
       const runCleanup = async (cause: CompletionCause): Promise<void> => {

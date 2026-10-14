@@ -18,6 +18,7 @@ const runCommand = (
   command: string,
   args: readonly string[],
   cwd: string = process.cwd(),
+  environment: Readonly<Record<string, string>> = {},
 ): void => {
   const result = spawnSync(command, [...args], {
     encoding: "utf8",
@@ -27,6 +28,7 @@ const runCommand = (
       npm_config_cache: resolve(".worker-tmp/cache/npm"),
       npm_config_logs_dir: resolve(".worker-tmp/cache/npm-logs"),
       npm_config_update_notifier: "false",
+      ...environment,
     },
   });
   if (result.status !== 0) {
@@ -50,21 +52,45 @@ const qualify = async (runtime: Runtime): Promise<void> => {
       `${JSON.stringify({ name: `test-consumer-${runtime}`, private: true, type: "module" }, null, 2)}\n`,
       "utf8",
     );
-    const adapter = runtime === "node" ? "node" : "bun";
-    await writeFile(
-      join(directory, "consumer.ts"),
-      `import { createProcessExecutor } from "@agent-teams/process-runtime";
-import { create${runtime === "node" ? "Node" : "Bun"}ProcessAdapter } from "@agent-teams/process-runtime/${adapter}";
-const result = await createProcessExecutor(create${runtime === "node" ? "Node" : "Bun"}ProcessAdapter()).run({
+    const consumerSource =
+      runtime === "node"
+        ? `import { createProcessExecutor } from "@agent-teams/process-runtime";
+import { createNodeProcessAdapter } from "@agent-teams/process-runtime/node";
+const result = await createProcessExecutor(createNodeProcessAdapter()).run({
   command: process.execPath,
-  args: ["-e", "process.stdout.write('installed-ok')"],
+  args: ["-e", "process.stdout.write('installed-node-ok')"],
   cwd: process.cwd(),
   environment: { CONSUMER: "1" },
 });
-if (result.stdout !== "installed-ok" || result.exitCode !== 0) {
-  throw new Error("installed consumer execution failed");
+if (result.stdout !== "installed-node-ok" || result.exitCode !== 0) {
+  throw new Error("installed Node consumer execution failed");
 }
-`,
+`
+        : `import { createProcessExecutor } from "@agent-teams/process-runtime";
+import { createBunProcessAdapter } from "@agent-teams/process-runtime/bun";
+import { createNodeProcessAdapter } from "@agent-teams/process-runtime/node";
+const native = await createProcessExecutor(createBunProcessAdapter()).run({
+  command: process.execPath,
+  args: ["-e", "process.stdout.write('installed-bun-ok')"],
+  cwd: process.cwd(),
+  environment: { CONSUMER: "1" },
+});
+if (native.stdout !== "installed-bun-ok" || native.exitCode !== 0) {
+  throw new Error("installed native Bun consumer execution failed");
+}
+const nodeInsideBun = await createProcessExecutor(createNodeProcessAdapter()).run({
+  command: process.env.NODE_EXECUTABLE ?? "node",
+  args: ["-e", "process.stdout.write('installed-node-under-bun-ok')"],
+  cwd: process.cwd(),
+  environment: { CONSUMER: "1" },
+});
+if (nodeInsideBun.stdout !== "installed-node-under-bun-ok" || nodeInsideBun.exitCode !== 0) {
+  throw new Error("installed /node transport inside Bun failed");
+}
+`;
+    await writeFile(
+      join(directory, "consumer.ts"),
+      consumerSource,
       "utf8",
     );
     await writeFile(
@@ -77,7 +103,7 @@ if (result.stdout !== "installed-ok" || result.exitCode !== 0) {
             moduleResolution: "NodeNext",
             strict: true,
             noEmit: true,
-            types: [runtime === "node" ? "node" : "bun"],
+            types: runtime === "node" ? ["node"] : ["bun", "node"],
           },
           include: ["consumer.ts"],
         },
@@ -108,7 +134,9 @@ if (result.stdout !== "installed-ok" || result.exitCode !== 0) {
     if (runtime === "node") {
       runCommand(process.execPath, ["consumer.ts"], directory);
     } else {
-      runCommand(process.env.BUN_BIN ?? "bun", ["consumer.ts"], directory);
+      runCommand(process.env.BUN_BIN ?? "bun", ["consumer.ts"], directory, {
+        NODE_EXECUTABLE: process.execPath,
+      });
     }
   } finally {
     await rm(directory, { recursive: true, force: true });

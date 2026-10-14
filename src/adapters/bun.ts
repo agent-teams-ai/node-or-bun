@@ -1,4 +1,5 @@
 import type { CompletionCause, Exit, Launch, ProcessAdapter, RunningProcess } from "../contract.js";
+import { PROCESS_CLEANUP_STEP_MS } from "../contract.js";
 import { ProcessRuntimeError, processError } from "../errors.js";
 import { cleanupDirectChild } from "../internal/termination.js";
 
@@ -96,18 +97,33 @@ const captureStream = (native: ReadableStream<Uint8Array>): StreamCapture => {
   let closePromise: Promise<void> | undefined;
   const release = (): void => {
     if (released) return;
-    released = true;
     reader.releaseLock();
+    released = true;
   };
   const close = (): Promise<void> => {
     if (closed && released) return Promise.resolve();
     closePromise ??= (async () => {
       closed = true;
+      const cancellation = Promise.resolve().then(() => reader.cancel());
+      // A pending read may make the first release attempt illegal. Try both
+      // immediately and after cancellation settles, retaining the final error.
+      let releaseFailure: unknown;
       try {
-        await reader.cancel();
-      } finally {
         release();
+      } catch (error) {
+        releaseFailure = error;
       }
+      try {
+        await cancellation;
+      } finally {
+        try {
+          release();
+          releaseFailure = undefined;
+        } catch (error) {
+          releaseFailure ??= error;
+        }
+      }
+      if (releaseFailure !== undefined) throw releaseFailure;
     })();
     return closePromise;
   };
@@ -135,7 +151,9 @@ const captureStream = (native: ReadableStream<Uint8Array>): StreamCapture => {
             }
           },
           async return(): Promise<IteratorResult<Uint8Array>> {
-            await close();
+            // Do not replace an abnormal read cause with a later close error.
+            // The executor observes this same idempotent close after cleanup.
+            void close().catch(() => undefined);
             return { done: true, value: undefined };
           },
         };
@@ -231,7 +249,7 @@ export const createBunProcessAdapter = (
           cleanupFailure = error;
         }
         try {
-          await closeBunCapture(child, captureOwners);
+          await closeBunCaptureWithin(child, captureOwners);
         } catch (error) {
           cleanupFailure ??= error;
         }
@@ -274,23 +292,41 @@ const closeBunCapture = async (
   child: BunChild,
   captureOwners: readonly StreamCapture[] = [],
 ): Promise<void> => {
-  const errors: unknown[] = [];
-  for (const capture of captureOwners) {
-    try {
-      await capture.close();
-    } catch (error) {
-      errors.push(error);
-    }
-  }
+  const operations: Promise<unknown>[] = captureOwners.map((capture) =>
+    Promise.resolve().then(() => capture.close()),
+  );
   for (const stream of [child.stdout, child.stderr]) {
     if (!(stream instanceof ReadableStream) || stream.locked) continue;
-    try {
-      await stream.cancel();
-    } catch (error) {
-      errors.push(error);
-    }
+    operations.push(Promise.resolve().then(() => stream.cancel()));
   }
+  const settled = await Promise.all(
+    operations.map((operation) =>
+      operation.then(
+        () => undefined,
+        (error: unknown) => error,
+      ),
+    ),
+  );
+  const errors = settled.filter((error): error is unknown => error !== undefined);
   if (errors.length > 0) {
     throw errors.length === 1 ? errors[0] : new AggregateError(errors, "native capture closure failed");
+  }
+};
+
+const closeBunCaptureWithin = async (
+  child: BunChild,
+  captureOwners: readonly StreamCapture[] = [],
+): Promise<void> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(processError("cleanup", "native capture close or reader settlement timed out")),
+      PROCESS_CLEANUP_STEP_MS,
+    );
+  });
+  try {
+    await Promise.race([closeBunCapture(child, captureOwners), timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 };

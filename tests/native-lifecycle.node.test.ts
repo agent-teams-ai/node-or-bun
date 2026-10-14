@@ -9,8 +9,10 @@ import type { Launch } from "../src/contract.js";
 import { createProcessExecutor } from "../src/executor.js";
 import { createNodeProcessAdapter, type NodeAcquireHook, type NodeCleanupHook } from "../src/adapters/node.js";
 
+const nodeExecutable = process.env.NODE_EXECUTABLE ?? process.execPath;
+
 const launchRequest = (directory: string): Launch => ({
-  command: process.execPath,
+  command: nodeExecutable,
   args: ["-e", "setTimeout(() => {}, 1000)"],
   cwd: directory,
   environment: {},
@@ -45,7 +47,7 @@ test("Node adapter releases native readers after normal EOF", async () => {
       },
     });
     const result = await createProcessExecutor(adapter).run({
-      command: process.execPath,
+      command: nodeExecutable,
       args: ["-e", "process.stdout.write('eof'); process.stderr.write('err')"],
       cwd: directory,
       environment: {},
@@ -190,3 +192,85 @@ test("Node observation distinguishes repeated live errors from exit", async () =
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+// Detects: the Node API adapter executing inside Bun can use a narrow managed
+// acquisition/cleanup pair and observe POSIX terminal cleanup. Windows Job
+// Object qualification remains a native Foundation gate.
+test(
+  "Node managed hooks confirm POSIX terminal cleanup",
+  { skip: process.platform === "win32" },
+  async () => {
+    const directory = await mkdtemp(join(resolve("sandbox"), "TEST-process-runtime-node-managed-"));
+    let child: ReturnType<typeof spawn> | undefined;
+    let cleanupCount = 0;
+    let terminalObservations = 0;
+    const waitForTerminal = async (target: ReturnType<typeof spawn>, timeoutMs: number): Promise<boolean> => {
+      if (target.exitCode !== null || target.signalCode !== null) return true;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<boolean>((resolvePromise) => {
+        timer = setTimeout(() => resolvePromise(false), timeoutMs);
+      });
+      try {
+        return await Promise.race([once(target, "exit").then(() => true), timeout]);
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+      }
+    };
+    const signalGroup = (target: ReturnType<typeof spawn>, signal: NodeJS.Signals): void => {
+      if (target.pid === undefined) return;
+      try {
+        process.kill(-target.pid, signal);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      }
+    };
+    const managedCleanup: NodeCleanupHook = async (target) => {
+      cleanupCount += 1;
+      signalGroup(target, "SIGTERM");
+      if (await waitForTerminal(target, 1_000)) {
+        terminalObservations += 1;
+        return;
+      }
+      signalGroup(target, "SIGKILL");
+      if (await waitForTerminal(target, 1_000)) {
+        terminalObservations += 1;
+        return;
+      }
+      throw new Error("managed terminal confirmation timed out");
+    };
+    try {
+      const adapter = createNodeProcessAdapter({
+        acquire: (request, retain) => {
+          child = spawn(request.command, [...request.args], {
+            cwd: request.cwd,
+            env: request.environment,
+            stdio: ["ignore", "pipe", "pipe"],
+            detached: true,
+            windowsHide: true,
+          });
+          retain(child);
+        },
+        cleanup: managedCleanup,
+      });
+      const controller = new AbortController();
+      const cancelled = createProcessExecutor(adapter).run({
+        ...launchRequest(directory),
+        signal: controller.signal,
+      });
+      setTimeout(() => controller.abort(), 25);
+      await assert.rejects(cancelled, (error: unknown) => {
+        assert.equal((error as { code?: string }).code, "cancelled");
+        return true;
+      });
+      assert.ok(child);
+      assert.equal(cleanupCount, 1);
+      assert.equal(terminalObservations, 1);
+      assert.ok(child.exitCode !== null || child.signalCode !== null);
+    } finally {
+      if (child?.pid !== undefined && child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+      }
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

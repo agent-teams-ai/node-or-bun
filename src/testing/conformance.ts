@@ -197,21 +197,33 @@ const runArbitrationCases = async (): Promise<void> => {
     await expectSyntheticError("invalid-output", () => resultPromise);
   }
 
-  // Detects: capture close failure is a cleanup failure and retains incomplete
-  // observation instead of being mistaken for normal EOF.
+  // Detects: an abnormal read settlement must finish through native close, but
+  // successful routine cleanup must preserve the stream's initiating reason.
   {
-    const never = new Promise<never>(() => undefined);
-    const pendingRunning: RunningProcess = {
-      stdout: { [Symbol.asyncIterator]: () => ({ next: () => never }) },
-      stderr: { [Symbol.asyncIterator]: () => ({ next: () => never }) },
+    let cleanupRequested = false;
+    let closeRequested = false;
+    const running: RunningProcess = {
+      stdout: syntheticStream([], async () => {
+        throw new Error("early native read failure");
+      }),
+      stderr: syntheticStream(),
       exited: Promise.resolve({ exitCode: 0, signal: null }),
-      cleanup: async () => undefined,
+      cleanup: async () => {
+        cleanupRequested = true;
+      },
       closeCapture: async () => {
-        throw new Error("native close failed");
+        closeRequested = true;
       },
     };
-    const error = await expectSyntheticError("cleanup", () => syntheticRun(pendingRunning, baseRequest));
-    assert(error.incompleteCustody, "capture close failure did not retain incomplete custody");
+    const error = await expectSyntheticError("stream", () => syntheticRun(running, baseRequest));
+    assert(error.message.includes("stdout capture failed"), "abnormal capture lost its initiating reason");
+    assert(
+      error.cause instanceof Error && error.cause.message === "early native read failure",
+      "abnormal capture lost the native read cause",
+    );
+    assert(cleanupRequested, "abnormal capture skipped owned cleanup");
+    assert(closeRequested, "abnormal capture skipped idempotent native close");
+    assert(!error.incompleteCustody, "successful abnormal-error cleanup claimed incomplete custody");
   }
 
   // Detects: timeout remains the initiating result after late capture failure.
@@ -407,7 +419,9 @@ export const runProcessRuntimeConformance = async (
     "cleanup failure did not retain timeout as its initiating problem",
   );
 
-  // A descendant inheriting stdio is not a portable retained-pipe oracle:
+  // Detects: forced closure after the EOF deadline is cleanup failure and
+  // retains close-requested, cause and incomplete-custody facts. A descendant
+  // inheriting stdio is not a portable retained-pipe oracle:
   // Windows/libuv may honestly deliver EOF when the launched child exits.
   // This deterministic pair instead remains open past both cleanup bounds and
   // proves that an unclosed reader is never converted into success.

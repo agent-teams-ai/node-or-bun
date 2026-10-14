@@ -50,6 +50,8 @@ jobs:
         run: npm run typecheck
       - name: Run shared Node and Bun conformance
         run: npm test
+      - name: Run Node adapter suites inside Bun
+        run: npm run test:node-under-bun
       - name: Pack exact release candidate
         run: npm run pack
       - name: Qualify fresh installed consumers

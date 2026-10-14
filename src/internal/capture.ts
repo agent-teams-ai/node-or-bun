@@ -4,6 +4,7 @@ import { processError } from "../errors.js";
 export type CaptureRead = {
   readonly bytes: Uint8Array;
   readonly overflow: boolean;
+  readonly normalEof: boolean;
 };
 
 const copyChunk = (value: Uint8Array): Uint8Array => {
@@ -65,6 +66,7 @@ export const drainCapture = async (
   } catch (cause) {
     // Preserve the stream-specific reason at the executor boundary.
     onProblem(cause);
+    return { bytes: concatBytes(chunks, length), overflow, normalEof: false };
   }
-  return { bytes: concatBytes(chunks, length), overflow };
+  return { bytes: concatBytes(chunks, length), overflow, normalEof: true };
 };
