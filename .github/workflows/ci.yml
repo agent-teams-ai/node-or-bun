@@ -87,3 +87,11 @@ jobs:
           name: process-runtime-release-candidate
           path: .worker-tmp/pack/
           if-no-files-found: error
+      - name: Pack unsupported namespace bootstrap
+        run: node scripts/pack-namespace-bootstrap.ts
+      - name: Upload unsupported namespace bootstrap
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: process-runtime-namespace-bootstrap
+          path: .worker-tmp/bootstrap-pack/
+          if-no-files-found: error
