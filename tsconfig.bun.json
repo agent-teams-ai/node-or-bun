@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["bun"],
+    "lib": ["ES2023", "DOM"],
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "tests/harness/bun.ts", "tests/fixtures/**/*.ts"],
+  "exclude": ["src/adapters/node.ts"]
+}
