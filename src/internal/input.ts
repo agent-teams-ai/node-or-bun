@@ -43,12 +43,14 @@ export const snapshotRequest = (request: Request): RequestSnapshot => {
   if (!Array.isArray(request.args)) {
     throw processError("invalid-input", "args must be an array");
   }
-  const args = request.args.map((arg, index) => {
+  const args: string[] = [];
+  for (let index = 0; index < request.args.length; index += 1) {
+    const arg: unknown = request.args[index];
     if (typeof arg !== "string" || hasNul(arg)) {
       throw processError("invalid-input", `args[${index}] must be a string without NUL`);
     }
-    return arg;
-  });
+    args.push(arg);
+  }
   const cwd = validateString(request.cwd, "cwd");
   const environment = snapshotEnvironment(request.environment);
   const timeoutMs = request.timeoutMs;

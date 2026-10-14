@@ -458,6 +458,25 @@ export const runProcessRuntimeConformance = async (
       timeoutMs: 0,
     }),
   );
+  // Detects: sparse argv holes must reject before any adapter launch.
+  {
+    const adapter = options.adapterFactory("normal");
+    let launchCount = 0;
+    const sparseArgs: string[] = new Array<string>(1);
+    await expectError("invalid-input", () =>
+      createProcessExecutor({
+        launch: async (launch) => {
+          launchCount += 1;
+          return adapter.launch(launch);
+        },
+      }).run({
+        command: options.command,
+        args: sparseArgs,
+        cwd: options.workingDirectory,
+      }),
+    );
+    assert(launchCount === 0, "sparse argv reached adapter.launch");
+  }
   await expectError("launch", () =>
     run(options, "normal", {
       ...request(options, "touch"),
