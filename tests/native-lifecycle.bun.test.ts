@@ -44,7 +44,8 @@ test("Bun adapter releases native readers after normal EOF", async () => {
 
 // Detects: a later injected reader setup fault must retain the exact child and
 // first reader, release that reader, attempt both capture owners, confirm
-// physical terminal cleanup, and finish within the native-close budget.
+// physical terminal cleanup, cancel a real attached reader before release, and
+// finish within the native-close budget while retaining undefined rejection.
 test(
   "Bun rollback bounds a partially acquired capture pair",
   { timeout: 2_500 },
@@ -55,28 +56,24 @@ test(
     let cleanupCount = 0;
     let terminalObservations = 0;
     let firstReaderCreated = false;
-    let firstReaderReleased = false;
     let firstReaderCancelRequested = false;
+    const firstCancelWhileLocked: boolean[] = [];
     let secondReaderAttempts = 0;
     let secondStreamCancelRequested = false;
     const injectedFault = new Error("second reader setup failed");
-    const pendingReader = {
-      read: () => new Promise<never>(() => undefined),
+    const firstCapture = new ReadableStream<Uint8Array>({
+      pull: () => new Promise<never>(() => undefined),
       cancel: () => {
         firstReaderCancelRequested = true;
+        firstCancelWhileLocked.push(firstCapture.locked);
         return new Promise<never>(() => undefined);
       },
-      releaseLock: () => {
-        firstReaderReleased = true;
-      },
-    };
-    const firstCapture = new ReadableStream<Uint8Array>();
-    Object.defineProperty(firstCapture, "getReader", {
-      value: () => {
-        firstReaderCreated = true;
-        return pendingReader;
-      },
     });
+    const nativeGetReader = firstCapture.getReader.bind(firstCapture);
+    firstCapture.getReader = () => {
+      firstReaderCreated = true;
+      return nativeGetReader();
+    };
     const brokenSecondCapture = new ReadableStream<Uint8Array>();
     Object.defineProperty(brokenSecondCapture, "getReader", {
       value: () => {
@@ -87,7 +84,7 @@ test(
     Object.defineProperty(brokenSecondCapture, "cancel", {
       value: () => {
         secondStreamCancelRequested = true;
-        return Promise.resolve();
+        return Promise.reject(undefined);
       },
     });
 
@@ -122,9 +119,17 @@ test(
           assert.equal((error as { code?: string }).code, "cleanup");
           assert.equal((error as { incompleteCustody?: boolean }).incompleteCustody, true);
           assert.equal((error as { initiatingError?: unknown }).initiatingError, injectedFault);
-          const closeCause = (error as { cause?: { code?: string; message?: string } }).cause;
-          assert.equal(closeCause?.code, "cleanup");
-          assert.match(closeCause?.message ?? "", /timed out/);
+          const closeCause = (error as { cause?: unknown }).cause;
+          assert.ok(closeCause instanceof AggregateError);
+          assert.ok(closeCause.errors.includes(undefined));
+          assert.ok(
+            closeCause.errors.some(
+              (cause) =>
+                cause instanceof Error &&
+                (cause as { code?: string }).code === "cleanup" &&
+                /timed out/.test(cause.message),
+            ),
+          );
           return true;
         },
       );
@@ -133,7 +138,8 @@ test(
       assert.equal(firstReaderCreated, true);
       assert.equal(secondReaderAttempts, 1);
       assert.equal(firstReaderCancelRequested, true);
-      assert.equal(firstReaderReleased, true);
+      assert.equal(firstCancelWhileLocked[0], true);
+      assert.equal(firstCapture.locked, false);
       assert.equal(secondStreamCancelRequested, true);
       assert.equal(cleanupCount, 1);
       assert.equal(terminalObservations, 1);

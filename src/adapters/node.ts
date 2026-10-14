@@ -3,6 +3,11 @@ import type { Readable } from "node:stream";
 import type { CompletionCause, Exit, Launch, ProcessAdapter, RunningProcess } from "../contract.js";
 import { PROCESS_CLEANUP_STEP_MS } from "../contract.js";
 import { ProcessRuntimeError, processError } from "../errors.js";
+import {
+  rejectedReasons,
+  settleOperation,
+  withCause,
+} from "../internal/settlement.js";
 import { cleanupDirectChild } from "../internal/termination.js";
 
 export type NodeRetain = (child: ChildProcess) => void;
@@ -213,27 +218,30 @@ export const createNodeProcessAdapter = (
           throw processError("launch", "process setup failed", cause);
         }
         const observed = observation ?? observeExit(child);
-        let cleanupFailure: unknown;
-        try {
+        const cleanupSettlement = await settleOperation(async () => {
           if (customCleanup !== undefined) {
             await customCleanup(child, "failed");
           } else if (observed.hasPid()) {
             await defaultCleanup(child, "failed", observed);
           }
-        } catch (error) {
-          cleanupFailure = error;
-        }
-        try {
-          await closeNodeCaptureWithin(child);
-        } catch (error) {
-          cleanupFailure ??= error;
-        }
-        if (cleanupFailure !== undefined) {
-          throw new ProcessRuntimeError("cleanup", "process setup cleanup failed", {
-            cause: cleanupFailure,
-            initiatingError: cause,
-            incompleteCustody: true,
-          });
+        });
+        const closeSettlement = await settleOperation(() => closeNodeCaptureWithin(child));
+        const failures = rejectedReasons([
+          cleanupSettlement,
+          closeSettlement,
+        ]);
+        if (failures.length > 0) {
+          const cleanupCause = failures.length === 1
+            ? failures[0]
+            : new AggregateError(failures, "cleanup and capture closure both failed");
+          throw withCause(
+            new ProcessRuntimeError("cleanup", "process setup cleanup failed", {
+              cause: cleanupCause,
+              initiatingError: cause,
+              incompleteCustody: true,
+            }),
+            cleanupCause,
+          );
         }
         throw processError("launch", "process setup failed", cause);
       };

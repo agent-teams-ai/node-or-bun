@@ -25,14 +25,14 @@ const snapshotEnvironment = (
     return undefined;
   }
   const entries = Object.entries(value);
-  const result: Record<string, string> = {};
+  const validated: [string, string][] = [];
   for (const [key, entryValue] of entries) {
     if (typeof key !== "string" || typeof entryValue !== "string" || hasNul(key) || hasNul(entryValue)) {
       throw processError("invalid-input", "environment entries must be strings without NUL");
     }
-    result[key] = entryValue;
+    validated.push([key, entryValue]);
   }
-  return result;
+  return Object.freeze(Object.fromEntries(validated));
 };
 
 export const snapshotRequest = (request: Request): RequestSnapshot => {
@@ -61,15 +61,15 @@ export const snapshotRequest = (request: Request): RequestSnapshot => {
   if (request.strictUtf8 !== undefined && typeof request.strictUtf8 !== "boolean") {
     throw processError("invalid-input", "strictUtf8 must be a boolean");
   }
-  return {
-    launch: {
+  return Object.freeze({
+    launch: Object.freeze({
       command,
-      args,
+      args: Object.freeze(args),
       cwd,
       ...(environment === undefined ? {} : { environment }),
-    },
+    }),
     signal: request.signal,
     timeoutMs,
     strictUtf8: request.strictUtf8 ?? false,
-  };
+  });
 };

@@ -1,6 +1,12 @@
 import type { CompletionCause, Exit, Launch, ProcessAdapter, RunningProcess } from "../contract.js";
 import { PROCESS_CLEANUP_STEP_MS } from "../contract.js";
 import { ProcessRuntimeError, processError } from "../errors.js";
+import {
+  rejectedReasons,
+  settleOperation,
+  settleWithin,
+  withCause,
+} from "../internal/settlement.js";
 import { cleanupDirectChild } from "../internal/termination.js";
 
 type BunChild = Bun.Subprocess<"ignore", "pipe", "pipe">;
@@ -101,29 +107,23 @@ const captureStream = (native: ReadableStream<Uint8Array>): StreamCapture => {
     released = true;
   };
   const close = (): Promise<void> => {
-    if (closed && released) return Promise.resolve();
     closePromise ??= (async () => {
+      if (closed && released) return;
       closed = true;
-      const cancellation = Promise.resolve().then(() => reader.cancel());
-      // A pending read may make the first release attempt illegal. Try both
-      // immediately and after cancellation settles, retaining the final error.
-      let releaseFailure: unknown;
-      try {
-        release();
-      } catch (error) {
-        releaseFailure = error;
+      // Cancellation must run while this reader is still attached. Release is
+      // attempted immediately and again after cancellation settles.
+      const cancellation = settleOperation(() => reader.cancel());
+      const firstRelease = settleOperation(release);
+      const cancellationSettlement = await cancellation;
+      const releases = [await firstRelease, await settleOperation(release)];
+      const failures = rejectedReasons([
+        cancellationSettlement,
+        ...releases,
+      ]);
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1) {
+        throw new AggregateError(failures, "native reader closure failed");
       }
-      try {
-        await cancellation;
-      } finally {
-        try {
-          release();
-          releaseFailure = undefined;
-        } catch (error) {
-          releaseFailure ??= error;
-        }
-      }
-      if (releaseFailure !== undefined) throw releaseFailure;
     })();
     return closePromise;
   };
@@ -242,23 +242,28 @@ export const createBunProcessAdapter = (
           throw processError("launch", "process setup failed", cause);
         }
         const observed = observation ?? observeExit(child);
-        let cleanupFailure: unknown;
-        try {
-          await (customCleanup ?? ((target, cause) => defaultCleanup(target, cause, observed)))(child, "failed");
-        } catch (error) {
-          cleanupFailure = error;
-        }
-        try {
-          await closeBunCaptureWithin(child, captureOwners);
-        } catch (error) {
-          cleanupFailure ??= error;
-        }
-        if (cleanupFailure !== undefined) {
-          throw new ProcessRuntimeError("cleanup", "process setup cleanup failed", {
-            cause: cleanupFailure,
-            initiatingError: cause,
-            incompleteCustody: true,
-          });
+        const cleanupSettlement = await settleOperation(() =>
+          (customCleanup ?? ((target, cause) => defaultCleanup(target, cause, observed)))(child, "failed"),
+        );
+        const closeSettlement = await settleOperation(() =>
+          closeBunCaptureWithin(child, captureOwners),
+        );
+        const failures = rejectedReasons([
+          cleanupSettlement,
+          closeSettlement,
+        ]);
+        if (failures.length > 0) {
+          const cleanupCause = failures.length === 1
+            ? failures[0]
+            : new AggregateError(failures, "cleanup and capture closure both failed");
+          throw withCause(
+            new ProcessRuntimeError("cleanup", "process setup cleanup failed", {
+              cause: cleanupCause,
+              initiatingError: cause,
+              incompleteCustody: true,
+            }),
+            cleanupCause,
+          );
         }
         throw processError("launch", "process setup failed", cause);
       };
@@ -292,24 +297,25 @@ const closeBunCapture = async (
   child: BunChild,
   captureOwners: readonly StreamCapture[] = [],
 ): Promise<void> => {
-  const operations: Promise<unknown>[] = captureOwners.map((capture) =>
-    Promise.resolve().then(() => capture.close()),
-  );
+  const operations: (() => Promise<void>)[] = captureOwners.map((capture) => () => capture.close());
   for (const stream of [child.stdout, child.stderr]) {
     if (!(stream instanceof ReadableStream) || stream.locked) continue;
-    operations.push(Promise.resolve().then(() => stream.cancel()));
+    operations.push(async () => {
+      await stream.cancel();
+    });
   }
   const settled = await Promise.all(
-    operations.map((operation) =>
-      operation.then(
-        () => undefined,
-        (error: unknown) => error,
-      ),
-    ),
+    operations.map((operation) => settleWithin(operation, PROCESS_CLEANUP_STEP_MS)),
   );
-  const errors = settled.filter((error): error is unknown => error !== undefined);
-  if (errors.length > 0) {
-    throw errors.length === 1 ? errors[0] : new AggregateError(errors, "native capture closure failed");
+  const failures = settled.flatMap((settlement): unknown[] => {
+    if (settlement.status === "rejected") return [settlement.reason];
+    if (settlement.status === "timeout") {
+      return [processError("cleanup", "native capture close or reader settlement timed out")];
+    }
+    return [];
+  });
+  if (failures.length > 0) {
+    throw failures.length === 1 ? failures[0] : new AggregateError(failures, "native capture closure failed");
   }
 };
 
@@ -317,16 +323,5 @@ const closeBunCaptureWithin = async (
   child: BunChild,
   captureOwners: readonly StreamCapture[] = [],
 ): Promise<void> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(
-      () => reject(processError("cleanup", "native capture close or reader settlement timed out")),
-      PROCESS_CLEANUP_STEP_MS,
-    );
-  });
-  try {
-    await Promise.race([closeBunCapture(child, captureOwners), timeout]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
+  await closeBunCapture(child, captureOwners);
 };

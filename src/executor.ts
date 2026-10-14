@@ -11,6 +11,12 @@ import { PROCESS_CLEANUP_STEP_MS } from "./contract.js";
 import { ProcessRuntimeError, isProcessRuntimeError, processError } from "./errors.js";
 import { decodeCapture, drainCapture } from "./internal/capture.js";
 import { snapshotRequest } from "./internal/input.js";
+import {
+  rejectedReasons,
+  settleOperation,
+  type Settlement,
+  withCause,
+} from "./internal/settlement.js";
 
 type FailureState = {
   readonly error: ProcessRuntimeError;
@@ -30,13 +36,20 @@ const deferred = <T>(): Deferred<T> => {
   return { promise, resolve };
 };
 
-const wait = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> => {
+type WaitResult<T> =
+  | { readonly status: "settled"; readonly value: T }
+  | { readonly status: "timeout" };
+
+const wait = async <T>(promise: Promise<T>, timeoutMs: number): Promise<WaitResult<T>> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<undefined>((resolve) => {
-    timer = setTimeout(() => resolve(undefined), timeoutMs);
+  const timeout = new Promise<WaitResult<T>>((resolve) => {
+    timer = setTimeout(() => resolve({ status: "timeout" }), timeoutMs);
   });
   try {
-    return await Promise.race([promise, timeout]);
+    return await Promise.race([
+      promise.then((value) => ({ status: "settled" as const, value })),
+      timeout,
+    ]);
   } finally {
     if (timer !== undefined) {
       clearTimeout(timer);
@@ -50,12 +63,14 @@ const errorFrom = (value: unknown, code: "launch" | "stream" | "cleanup", messag
 const cleanupError = (
   cause: unknown,
   initiatingError: unknown,
-): ProcessRuntimeError =>
-  new ProcessRuntimeError("cleanup", "process cleanup did not complete", {
+): ProcessRuntimeError => {
+  const error = new ProcessRuntimeError("cleanup", "process cleanup did not complete", {
     cause,
     initiatingError,
     incompleteCustody: true,
   });
+  return withCause(error, cause);
+};
 
 export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor => {
   if (adapter === null || typeof adapter !== "object" || typeof adapter.launch !== "function") {
@@ -70,7 +85,6 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       let completionFailure: FailureState | undefined;
       let exitState: Exit | undefined;
       let completionStarted = false;
-      let abnormalCapture = false;
 
       const beginFailure = (error: ProcessRuntimeError, cause: CompletionCause): void => {
         const state = { error, cause };
@@ -125,15 +139,9 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
 
       const stdoutRead = drainCapture(running.stdout, (cause) => {
         beginFailure(errorFrom(cause, "stream", "stdout capture failed"), "failed");
-      }).then((capture) => {
-        if (!capture.normalEof) abnormalCapture = true;
-        return capture;
       });
       const stderrRead = drainCapture(running.stderr, (cause) => {
         beginFailure(errorFrom(cause, "stream", "stderr capture failed"), "failed");
-      }).then((capture) => {
-        if (!capture.normalEof) abnormalCapture = true;
-        return capture;
       });
       const captures = Promise.all([stdoutRead, stderrRead]);
 
@@ -161,33 +169,36 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
 
       const closeAndSettleCapture = async (): Promise<void> => {
         const initiallySettled = await wait(captures, PROCESS_CLEANUP_STEP_MS);
-        if (initiallySettled !== undefined) {
-          if (initiallySettled.every((capture) => capture.normalEof)) return;
+        if (
+          initiallySettled.status === "settled" &&
+          initiallySettled.value.every((capture) => capture.normalEof)
+        ) {
+          return;
         }
-        const forcedAfterEofDeadline = initiallySettled === undefined && !abnormalCapture;
-        let closeFailure: unknown;
-        const close = (async () => {
-          try {
-            await running.closeCapture();
-          } catch (cause) {
-            closeFailure = cause;
-          }
-        })();
+        const forcedAfterEofDeadline = initiallySettled.status === "timeout";
+        let closeSettlement: Settlement<void> | undefined;
+        const close = settleOperation(() => running.closeCapture()).then((settlement) => {
+          closeSettlement = settlement;
+          return settlement;
+        });
         const settled = await wait(
-          Promise.all([close, captures]).then(() => true).catch((cause) => {
-            closeFailure ??= cause;
-            return true;
-          }),
+          Promise.all([close, settleOperation(() => captures)]).then(() => true),
           PROCESS_CLEANUP_STEP_MS,
         );
-        if (settled === undefined) {
+        const closeFailure = closeSettlement !== undefined && closeSettlement.status === "rejected"
+          ? closeSettlement
+          : undefined;
+        if (settled.status === "timeout") {
+          const closeCause = closeFailure === undefined
+            ? new Error("native capture close or reader settlement remained open")
+            : closeFailure.reason;
           throw cleanupError(
-            closeFailure ?? new Error("native capture close or reader settlement remained open"),
+            closeCause,
             failureState?.error,
           );
         }
         if (closeFailure !== undefined) {
-          throw cleanupError(closeFailure, failureState?.error);
+          throw cleanupError(closeFailure.reason, failureState?.error);
         }
         if (forcedAfterEofDeadline) {
           throw cleanupError(new Error("capture EOF deadline elapsed"), failureState?.error);
@@ -197,25 +208,20 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       };
 
       const runCleanup = async (cause: CompletionCause): Promise<void> => {
-        let cleanupFailure: unknown;
-        try {
-          await running.cleanup(cause);
-        } catch (error) {
-          cleanupFailure = error;
-        }
-        try {
-          await closeAndSettleCapture();
-        } catch (error) {
-          if (cleanupFailure === undefined) {
-            throw error;
-          }
+        const cleanupSettlement = await settleOperation(() => running.cleanup(cause));
+        const closeSettlement = await settleOperation(() => closeAndSettleCapture());
+        const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
+        if (failures.length > 1) {
           throw cleanupError(
-            new AggregateError([cleanupFailure, error], "cleanup and capture closure both failed"),
+            new AggregateError(failures, "cleanup and capture closure both failed"),
             failureState?.error,
           );
         }
-        if (cleanupFailure !== undefined) {
-          throw cleanupError(cleanupFailure, failureState?.error);
+        if (cleanupSettlement.status === "rejected") {
+          throw cleanupError(cleanupSettlement.reason, failureState?.error);
+        }
+        if (closeSettlement.status === "rejected") {
+          throw closeSettlement.reason;
         }
       };
 

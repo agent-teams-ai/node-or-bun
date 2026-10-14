@@ -1,4 +1,5 @@
 import type { CompletionCause, Exit, ProcessAdapter, ProcessRunResult, Request, RunningProcess } from "../contract.js";
+import { PROCESS_CLEANUP_STEP_MS } from "../contract.js";
 import { ProcessRuntimeError, isProcessRuntimeError, type ProcessErrorCode } from "../errors.js";
 import { createProcessExecutor } from "../executor.js";
 
@@ -226,6 +227,87 @@ const runArbitrationCases = async (): Promise<void> => {
     assert(!error.incompleteCustody, "successful abnormal-error cleanup claimed incomplete custody");
   }
 
+  // Detects: an independently pending capture remains subject to the EOF
+  // deadline even after the other capture has already failed.
+  {
+    let pendingSettled: ((result: IteratorResult<Uint8Array>) => void) | undefined;
+    let closeRequested = false;
+    const running: RunningProcess = {
+      stdout: syntheticStream([], async () => {
+        throw new Error("independent stdout read failure");
+      }),
+      stderr: {
+        [Symbol.asyncIterator](): AsyncIterator<Uint8Array> {
+          return {
+            next: () =>
+              new Promise<IteratorResult<Uint8Array>>((resolve) => {
+                pendingSettled = resolve;
+              }),
+          };
+        },
+      },
+      exited: Promise.resolve({ exitCode: 0, signal: null }),
+      cleanup: async () => undefined,
+      closeCapture: async () => {
+        closeRequested = true;
+        pendingSettled?.({ done: true, value: undefined });
+      },
+    };
+    const started = Date.now();
+    const error = await expectSyntheticError("cleanup", () => syntheticRun(running, baseRequest));
+    assert(closeRequested, "mixed capture failure skipped forced native closure");
+    assert(error.incompleteCustody, "mixed pending capture claimed release");
+    assert(
+      error.initiatingError instanceof Error &&
+        error.initiatingError.message === "stdout capture failed",
+      "mixed pending capture lost its initiating stream error",
+    );
+    assert(
+      error.cause instanceof Error && error.cause.message === "capture EOF deadline elapsed",
+      "mixed pending capture lost the EOF-deadline cause",
+    );
+    assert(Date.now() - started >= PROCESS_CLEANUP_STEP_MS, "mixed pending capture bypassed the EOF deadline");
+  }
+
+  // Detects: rejected undefined is an explicit cleanup/close failure and is
+  // retained in aggregation instead of being mistaken for successful closure.
+  {
+    const running: RunningProcess = {
+      stdout: syntheticStream([], async () => {
+        throw undefined;
+      }),
+      stderr: syntheticStream(),
+      exited: Promise.resolve({ exitCode: 0, signal: null }),
+      cleanup: async () => {
+        throw undefined;
+      },
+      closeCapture: async () => {
+        throw undefined;
+      },
+    };
+    const error = await expectSyntheticError("cleanup", () => syntheticRun(running, baseRequest));
+    assert(error.incompleteCustody, "undefined cleanup rejection claimed release");
+    assert(
+      error.initiatingError instanceof Error &&
+        error.initiatingError.message === "stdout capture failed",
+      "undefined cleanup rejection lost its initiating stream error",
+    );
+    const aggregate = error.cause;
+    if (!(aggregate instanceof AggregateError)) {
+      throw new Error("undefined cleanup rejection was not retained in aggregation");
+    }
+    if (aggregate.errors.length !== 2 || aggregate.errors[0] !== undefined) {
+      throw new Error("undefined cleanup rejection was not retained in aggregation");
+    }
+    const closeFailure = aggregate.errors[1];
+    assert(
+      closeFailure instanceof Error &&
+        Object.hasOwn(closeFailure, "cause") &&
+        closeFailure.cause === undefined,
+      "undefined close rejection lost its explicit cause status",
+    );
+  }
+
   // Detects: timeout remains the initiating result after late capture failure.
   {
     const exit = deferred<Exit>();
@@ -291,8 +373,29 @@ export const runProcessRuntimeConformance = async (
   assert(!exact.stdout.includes("INHERITED"), "supplied environment silently merged");
 
   const mutableArgs = [options.fixturePath, "echo", "snapshot"];
-  const mutableEnvironment = { EXACT: "snapshot" };
-  const snapshotRun = createProcessExecutor(options.adapterFactory("normal")).run({
+  const mutableEnvironment: Record<string, string> = { EXACT: "snapshot" };
+  Object.defineProperty(mutableEnvironment, "__proto__", {
+    value: "snapshot",
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+  let snapshotWasFrozen = false;
+  let snapshotOwnProto = false;
+  const adapter = options.adapterFactory("normal");
+  const snapshotRun = createProcessExecutor({
+    launch: async (launch) => {
+      snapshotWasFrozen =
+        Object.isFrozen(launch) &&
+        Object.isFrozen(launch.args) &&
+        Object.isFrozen(launch.environment);
+      snapshotOwnProto =
+        launch.environment !== undefined &&
+        Object.hasOwn(launch.environment, "__proto__") &&
+        launch.environment["__proto__"] === "snapshot";
+      return adapter.launch(launch);
+    },
+  }).run({
     command: options.command,
     args: mutableArgs,
     cwd: options.workingDirectory,
@@ -300,9 +403,17 @@ export const runProcessRuntimeConformance = async (
   });
   mutableArgs[2] = "mutated";
   mutableEnvironment.EXACT = "mutated";
+  Object.defineProperty(mutableEnvironment, "__proto__", {
+    value: "mutated",
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
   const snapshot = await snapshotRun;
+  assert(snapshotWasFrozen, "request snapshot was not frozen");
   assert(snapshot.stdout.includes('"argv":["echo","snapshot"]'), "args changed after run entry");
   assert(snapshot.stdout.includes('"EXACT":"snapshot"'), "environment changed after run entry");
+  assert(snapshotOwnProto, "own __proto__ environment key was not preserved");
 
   const concurrent = await run(options, "normal", request(options, "concurrent"));
   assert(concurrent.stdout === "out-0out-1out-2", "concurrent stdout was reordered or truncated");
