@@ -48,6 +48,8 @@ accepted: Execa is absent, the change-set removes the production
 `dependencies` key entirely (zero production dependencies), and the
 existing native Node and Bun adapters carry the shared section 3.2 classifier
 and section 3.3 lifecycle. The accepted v3 record above remains unchanged.
+The full decision record with input facts and rule application is
+`docs/decisions/backend.md`.
 
 ## Section 3.4 consumer-profile result
 
