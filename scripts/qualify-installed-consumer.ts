@@ -12,7 +12,7 @@ const argument = (name: string): string | undefined => {
 const runtimeArgument = argument("runtime");
 const runtimes: Runtime[] =
   runtimeArgument === undefined ? ["node", "bun"] : [runtimeArgument === "bun" ? "bun" : "node"];
-const archive = resolve(argument("archive") ?? ".worker-tmp/pack/agent-teams-process-runtime-0.1.0.tgz");
+const archive = resolve(argument("archive") ?? ".worker-tmp/pack/node-or-bun-0.2.0.tgz");
 
 const runCommand = (
   command: string,
@@ -54,8 +54,10 @@ const qualify = async (runtime: Runtime): Promise<void> => {
     );
     const consumerSource =
       runtime === "node"
-        ? `import { createProcessExecutor } from "@agent-teams/process-runtime";
-import { createNodeProcessAdapter } from "@agent-teams/process-runtime/node";
+        ? `import { createProcessExecutor } from "node-or-bun";
+import { createNodeProcessAdapter } from "node-or-bun/node";
+import { runProcessRuntimeConformance } from "node-or-bun/testing";
+if (typeof runProcessRuntimeConformance !== "function") throw new Error("testing subpath is unavailable");
 const result = await createProcessExecutor(createNodeProcessAdapter()).run({
   command: process.execPath,
   args: ["-e", "process.stdout.write('installed-node-ok')"],
@@ -66,9 +68,11 @@ if (result.stdout !== "installed-node-ok" || result.exitCode !== 0) {
   throw new Error("installed Node consumer execution failed");
 }
 `
-        : `import { createProcessExecutor } from "@agent-teams/process-runtime";
-import { createBunProcessAdapter } from "@agent-teams/process-runtime/bun";
-import { createNodeProcessAdapter } from "@agent-teams/process-runtime/node";
+        : `import { createProcessExecutor } from "node-or-bun";
+import { createBunProcessAdapter } from "node-or-bun/bun";
+import { createNodeProcessAdapter } from "node-or-bun/node";
+import { runProcessRuntimeConformance } from "node-or-bun/testing";
+if (typeof runProcessRuntimeConformance !== "function") throw new Error("testing subpath is unavailable");
 const native = await createProcessExecutor(createBunProcessAdapter()).run({
   command: process.execPath,
   args: ["-e", "process.stdout.write('installed-bun-ok')"],

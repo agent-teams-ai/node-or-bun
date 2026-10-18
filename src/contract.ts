@@ -1,3 +1,5 @@
+import type { ProcessRuntimeFacts } from "./errors.js";
+
 export type Exit = {
   readonly exitCode: number | null;
   readonly signal: string | null;
@@ -33,6 +35,7 @@ export type ProcessAdapter = {
 export type ProcessRunResult = Exit & {
   readonly stdout: string;
   readonly stderr: string;
+  readonly facts: ProcessRuntimeFacts;
 };
 
 export type ProcessExecutor = {

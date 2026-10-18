@@ -132,7 +132,8 @@ const runArbitrationCases = async (): Promise<void> => {
     cwd: ".",
   };
 
-  // Detects: cancellation must not hide an independently observed numeric exit.
+  // Detects: cancellation observed before exit is the first initiating cause;
+  // a later numeric exit remains an observed fact but cannot replace it.
   {
     const controller = new AbortController();
     const exit = deferred<Exit>();
@@ -149,8 +150,16 @@ const runArbitrationCases = async (): Promise<void> => {
       signal: controller.signal,
     });
     controller.abort();
-    const result = await resultPromise;
-    assert(result.exitCode === 17, "cancel plus numeric exit did not return the observed Exit fact");
+    const error = await expectSyntheticError("cancelled", () => resultPromise);
+    assert(error.facts.initiatingCause === "cancellation", "cancellation lost its initiating cause");
+    assert(
+      error.facts.completionRequestedBeforeExitObservation,
+      "pre-exit cancellation lost its completion-order fact",
+    );
+    assert(
+      error.facts.observedExit?.exitCode === 17,
+      "cancellation arbitration lost the observed Exit fact",
+    );
   }
 
   // Detects: cancellation must not hide a later capture failure.
@@ -173,8 +182,15 @@ const runArbitrationCases = async (): Promise<void> => {
       signal: controller.signal,
     });
     controller.abort();
-    const error = await expectSyntheticError("stream", () => resultPromise);
-    assert(error.message.includes("stdout capture failed"), "cancel plus capture failure lost its capture reason");
+    const error = await expectSyntheticError("cancelled", () => resultPromise);
+    assert(
+      error.facts.initiatingCause === "cancellation",
+      "later capture failure replaced the first initiating cancellation",
+    );
+    assert(
+      error.facts.lateFailureCodes.includes("stream"),
+      "later capture failure was not preserved as a neutral code",
+    );
   }
 
   // Detects: cancellation must not hide a later strict UTF-8 decode failure.
@@ -195,7 +211,15 @@ const runArbitrationCases = async (): Promise<void> => {
       strictUtf8: true,
     });
     controller.abort();
-    await expectSyntheticError("invalid-output", () => resultPromise);
+    const error = await expectSyntheticError("cancelled", () => resultPromise);
+    assert(
+      error.facts.initiatingCause === "cancellation",
+      "later decode failure replaced the first initiating cancellation",
+    );
+    assert(
+      error.facts.lateFailureCodes.includes("invalid-output"),
+      "later decode failure was not preserved as a neutral code",
+    );
   }
 
   // Detects: an abnormal read settlement must finish through native close, but
@@ -421,6 +445,9 @@ export const runProcessRuntimeConformance = async (
 
   const numeric = await run(options, "normal", request(options, "exit", { args: [options.fixturePath, "exit", "7"] }));
   assert(numeric.exitCode === 7 && numeric.signal === null, "numeric exit facts changed");
+  assert(numeric.facts.initiatingCause === "exit", "numeric exit lost its neutral result classification");
+  assert(numeric.facts.observedExit?.exitCode === 7, "numeric result lost its observed Exit fact");
+  assert(numeric.facts.outputBounded, "normal capture did not retain bounded-output status");
 
   const signal = await run(options, "normal", request(options, "signal"));
   if (options.supportsSignalExit) {
@@ -435,14 +462,20 @@ export const runProcessRuntimeConformance = async (
 
   const invalidReplacement = await run(options, "normal", request(options, "invalid-utf8"));
   assert(invalidReplacement.stdout === "\uFFFD", "default UTF-8 replacement was not explicit");
-  await expectError("invalid-output", () =>
+  const strictDecodeFailure = await expectError("invalid-output", () =>
     run(options, "normal", {
       ...request(options, "invalid-utf8"),
       strictUtf8: true,
     }),
   );
+  assert(strictDecodeFailure.facts.initiatingCause === "decode", "strict decode lost its initiating cause");
+  assert(strictDecodeFailure.facts.lateFailureCodes.includes("invalid-output"), "strict decode code was not retained");
 
-  await expectError("output-limit", () => run(options, "normal", request(options, "overflow")));
+  const overflowFailure = await expectError("output-limit", () =>
+    run(options, "normal", request(options, "overflow")),
+  );
+  assert(overflowFailure.facts.initiatingCause === "capture", "overflow lost its capture classification");
+  assert(overflowFailure.facts.outputBounded, "overflow lost bounded-output status");
   await expectError("invalid-input", async () => {
     options.adapterFactory("partial-hooks");
   });
@@ -543,6 +576,7 @@ export const runProcessRuntimeConformance = async (
     }),
   );
   assert(cleanupFailure.incompleteCustody, "cleanup failure did not retain incomplete custody");
+  assert(cleanupFailure.facts.initiatingCause === "timeout", "cleanup failure lost timeout arbitration facts");
   assert(
     isProcessRuntimeError(cleanupFailure.initiatingError) &&
       cleanupFailure.initiatingError.code === "timeout",

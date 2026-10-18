@@ -8,8 +8,18 @@ import type {
   RunningProcess,
 } from "./contract.js";
 import { PROCESS_CLEANUP_STEP_MS } from "./contract.js";
-import { ProcessRuntimeError, isProcessRuntimeError, processError } from "./errors.js";
-import { decodeCapture, drainCapture } from "./internal/capture.js";
+import {
+  ProcessRuntimeError,
+  isProcessRuntimeError,
+  processError,
+  type ProcessErrorCode,
+  type ProcessInitiatingCause,
+} from "./errors.js";
+import {
+  classifyProcessOutcome,
+  type InitiatingFailure,
+} from "./internal/classification.js";
+import { decodeCapture, drainCapture, type CaptureRead } from "./internal/capture.js";
 import { snapshotRequest } from "./internal/input.js";
 import {
   rejectedReasons,
@@ -17,11 +27,6 @@ import {
   type Settlement,
   withCause,
 } from "./internal/settlement.js";
-
-type FailureState = {
-  readonly error: ProcessRuntimeError;
-  readonly cause: CompletionCause;
-};
 
 type Deferred<T> = {
   readonly promise: Promise<T>;
@@ -57,19 +62,39 @@ const wait = async <T>(promise: Promise<T>, timeoutMs: number): Promise<WaitResu
   }
 };
 
-const errorFrom = (value: unknown, code: "launch" | "stream" | "cleanup", message: string): ProcessRuntimeError =>
-  value instanceof ProcessRuntimeError ? value : processError(code, message, value);
+const captureError = (value: unknown, streamName: "stdout" | "stderr"): ProcessRuntimeError => {
+  const code = isProcessRuntimeError(value) && value.code === "output-limit"
+    ? "output-limit"
+    : "stream";
+  return new ProcessRuntimeError(
+    code,
+    code === "output-limit" ? "captured output exceeded 4 MiB" : `${streamName} capture failed`,
+    { cause: value },
+  );
+};
 
-const cleanupError = (
+const cleanupFailureFrom = (
   cause: unknown,
   initiatingError: unknown,
-): ProcessRuntimeError => {
-  const error = new ProcessRuntimeError("cleanup", "process cleanup did not complete", {
-    cause,
-    initiatingError,
-    incompleteCustody: true,
-  });
-  return withCause(error, cause);
+): unknown => {
+  void initiatingError;
+  return cause;
+};
+
+const initiatingCause = (cause: CompletionCause | "capture" | "observation"): ProcessInitiatingCause => {
+  switch (cause) {
+    case "timeout":
+      return "timeout";
+    case "cancelled":
+      return "cancellation";
+    case "capture":
+      return "capture";
+    case "observation":
+    case "failed":
+      return "observation";
+    case "exited":
+      return "exit";
+  }
 };
 
 export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor => {
@@ -80,28 +105,54 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
   return {
     run: async (request: Request): Promise<ProcessRunResult> => {
       const snapshot = snapshotRequest(request);
-      const failure = deferred<FailureState>();
-      let failureState: FailureState | undefined;
-      let completionFailure: FailureState | undefined;
-      let exitState: Exit | undefined;
-      let completionStarted = false;
+      const failure = deferred<InitiatingFailure>();
+      let initiatingFailure: InitiatingFailure | undefined;
+      let observedExit: Exit | null = null;
+      let completionRequestedBeforeExitObservation = false;
+      let lateFailureCodes: ProcessErrorCode[] = [];
+      let captureReads: readonly [CaptureRead, CaptureRead] | undefined;
+      let outputBounded = false;
 
-      const beginFailure = (error: ProcessRuntimeError, cause: CompletionCause): void => {
-        const state = { error, cause };
-        failureState ??= state;
-        if (cause === "failed") {
-          completionFailure ??= state;
+      const addLateFailureCode = (code: ProcessErrorCode): void => {
+        if (!lateFailureCodes.includes(code)) {
+          lateFailureCodes = [...lateFailureCodes, code];
         }
-        failure.resolve(failureState);
+      };
+
+      const beginFailure = (
+        error: ProcessRuntimeError,
+        cause: CompletionCause | "capture" | "observation",
+      ): void => {
+        if (initiatingFailure !== undefined) {
+          if (cause === "capture") addLateFailureCode(error.code);
+          return;
+        }
+        const state: InitiatingFailure = {
+          cause: initiatingCause(cause),
+          code: error.code,
+          error,
+        };
+        initiatingFailure = state;
+        completionRequestedBeforeExitObservation = observedExit === null;
+        failure.resolve(state);
       };
 
       if (snapshot.signal !== undefined && Boolean(snapshot.signal.aborted)) {
-        throw processError("cancelled", "process request was already cancelled");
+        throw new ProcessRuntimeError("cancelled", "process request was already cancelled", {
+          initiatingError: snapshot.signal.reason,
+          facts: {
+            initiatingCause: "cancellation",
+            completionRequestedBeforeExitObservation: true,
+          },
+        });
       }
 
       const onAbort = (): void => {
-        if (!completionStarted) {
-          beginFailure(processError("cancelled", "process request was cancelled"), "cancelled");
+        if (observedExit === null && initiatingFailure === undefined) {
+          beginFailure(
+            processError("cancelled", "process request was cancelled", snapshot.signal?.reason),
+            "cancelled",
+          );
         }
       };
       snapshot.signal?.addEventListener("abort", onAbort, { once: true });
@@ -109,7 +160,7 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
         snapshot.timeoutMs === undefined
           ? undefined
           : setTimeout(() => {
-              if (!completionStarted) {
+              if (observedExit === null && initiatingFailure === undefined) {
                 beginFailure(processError("timeout", "process deadline elapsed"), "timeout");
               }
             }, snapshot.timeoutMs);
@@ -117,7 +168,13 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       if (snapshot.signal !== undefined && Boolean(snapshot.signal.aborted)) {
         if (timer !== undefined) clearTimeout(timer);
         snapshot.signal.removeEventListener("abort", onAbort);
-        throw processError("cancelled", "process request was already cancelled");
+        throw new ProcessRuntimeError("cancelled", "process request was already cancelled", {
+          initiatingError: snapshot.signal.reason,
+          facts: {
+            initiatingCause: "cancellation",
+            completionRequestedBeforeExitObservation: true,
+          },
+        });
       }
 
       let running: RunningProcess;
@@ -126,43 +183,74 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       } catch (cause) {
         if (timer !== undefined) clearTimeout(timer);
         snapshot.signal?.removeEventListener("abort", onAbort);
-        // A cleanup-coded rollback result is authoritative even if cancellation
-        // or a deadline was observed while acquisition was being unwound.
         if (isProcessRuntimeError(cause) && cause.code === "cleanup") {
-          throw cause;
+          throw new ProcessRuntimeError("cleanup", "process cleanup did not complete", {
+            cause: cause.cause,
+            initiatingError: cause.initiatingError,
+            facts: {
+              ...cause.facts,
+              initiatingCause: cause.facts.initiatingCause ?? "launch",
+              incompleteCustody: true,
+            },
+          });
         }
-        if (failureState !== undefined) {
-          throw failureState.error;
+        if (initiatingFailure !== undefined) {
+          throw new ProcessRuntimeError(
+            initiatingFailure.code,
+            initiatingFailure.error.message,
+            {
+              cause: initiatingFailure.error.cause,
+              initiatingError: initiatingFailure.error,
+              facts: {
+                initiatingCause: initiatingFailure.cause,
+                completionRequestedBeforeExitObservation,
+                lateFailureCodes,
+              },
+            },
+          );
         }
-        throw errorFrom(cause, "launch", "process launch failed");
+        throw new ProcessRuntimeError("launch", "process launch failed", {
+          cause,
+          initiatingError: cause,
+          facts: { initiatingCause: "launch" },
+        });
       }
 
       const stdoutRead = drainCapture(running.stdout, (cause) => {
-        beginFailure(errorFrom(cause, "stream", "stdout capture failed"), "failed");
+        beginFailure(captureError(cause, "stdout"), "capture");
       });
       const stderrRead = drainCapture(running.stderr, (cause) => {
-        beginFailure(errorFrom(cause, "stream", "stderr capture failed"), "failed");
+        beginFailure(captureError(cause, "stderr"), "capture");
       });
-      const captures = Promise.all([stdoutRead, stderrRead]);
+      outputBounded = true;
+      // Invariant assertion: the 4 MiB capture limits are in force for this
+      // run; the fact does not report whether truncation occurred (review-v2
+      // R11 disposition, documented invariant).
+      // Contract: drainCapture reports failures through beginFailure and its
+      // promise never rejects, so this chain cannot reject (review-v2 R17
+      // disposition, documented non-rejecting drain contract).
+      const captures = Promise.all([stdoutRead, stderrRead]).then((value) => {
+        captureReads = value;
+        return value;
+      });
 
       const exitObservation = running.exited.then(
         (exit) => {
-          exitState = exit;
+          observedExit = exit;
           return { kind: "exit" as const };
         },
         (cause) => {
-          beginFailure(errorFrom(cause, "stream", "process observation failed"), "failed");
+          beginFailure(
+            new ProcessRuntimeError("stream", "process observation failed", { cause }),
+            "observation",
+          );
           return { kind: "failure" as const };
         },
       );
-
       const failureObservation = failure.promise.then(() => ({ kind: "failure" as const }));
       const firstObservation = await Promise.race([exitObservation, failureObservation]);
-      completionStarted = true;
 
-      // Normal completion removes request controls before owned cleanup. Timeout
-      // and cancellation keep their initiating state through the cleanup window.
-      if (firstObservation.kind === "exit" && failureState === undefined) {
+      if (firstObservation.kind === "exit" && initiatingFailure === undefined) {
         if (timer !== undefined) clearTimeout(timer);
         snapshot.signal?.removeEventListener("abort", onAbort);
       }
@@ -189,97 +277,94 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
           ? closeSettlement
           : undefined;
         if (settled.status === "timeout") {
-          const closeCause = closeFailure === undefined
-            ? new Error("native capture close or reader settlement remained open")
-            : closeFailure.reason;
-          throw cleanupError(
-            closeCause,
-            failureState?.error,
+          throw cleanupFailureFrom(
+            closeFailure === undefined
+              ? new Error("native capture close or reader settlement remained open")
+              : closeFailure.reason,
+            initiatingFailure?.error,
           );
         }
         if (closeFailure !== undefined) {
-          throw cleanupError(closeFailure.reason, failureState?.error);
-        }
-        if (forcedAfterEofDeadline) {
-          throw cleanupError(new Error("capture EOF deadline elapsed"), failureState?.error);
-        }
-        // Successful routine close after an abnormal read settlement preserves
-        // that stream's initiating failure instead of inventing cleanup failure.
-      };
-
-      const runCleanup = async (cause: CompletionCause): Promise<void> => {
-        const cleanupSettlement = await settleOperation(() => running.cleanup(cause));
-        const closeSettlement = await settleOperation(() => closeAndSettleCapture());
-        const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
-        if (failures.length > 1) {
-          throw cleanupError(
-            new AggregateError(failures, "cleanup and capture closure both failed"),
-            failureState?.error,
+          throw cleanupFailureFrom(
+            closeFailure.reason === undefined
+              ? withCause(new Error("native capture closure failed"), undefined)
+              : closeFailure.reason,
+            initiatingFailure?.error,
           );
         }
-        if (cleanupSettlement.status === "rejected") {
-          throw cleanupError(cleanupSettlement.reason, failureState?.error);
-        }
-        if (closeSettlement.status === "rejected") {
-          throw closeSettlement.reason;
+        if (forcedAfterEofDeadline) {
+          throw cleanupFailureFrom(
+            new Error("capture EOF deadline elapsed"),
+            initiatingFailure?.error,
+          );
         }
       };
 
-      try {
-        await runCleanup(failureState?.cause ?? (firstObservation.kind === "exit" ? "exited" : "failed"));
-      } finally {
-        if (timer !== undefined) clearTimeout(timer);
-        snapshot.signal?.removeEventListener("abort", onAbort);
+      let cleanupFailure: { readonly reason: unknown } | undefined;
+      const cleanupSettlement = await settleOperation(() =>
+        running.cleanup(initiatingFailure?.cause === "timeout"
+          ? "timeout"
+          : initiatingFailure?.cause === "cancellation"
+            ? "cancelled"
+            : firstObservation.kind === "exit"
+              ? "exited"
+              : "failed"),
+      );
+      const closeSettlement = await settleOperation(() => closeAndSettleCapture());
+      const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
+      if (failures.length > 0) {
+        cleanupFailure = {
+          reason: failures.length === 1
+            ? failures[0]
+            : new AggregateError(failures, "cleanup and capture closure both failed"),
+        };
       }
 
-      const [stdoutCapture, stderrCapture] = await captures;
-      const decode = (): ProcessRunResult => {
-        const stdout = decodeCapture(stdoutCapture.bytes, snapshot.strictUtf8, "stdout");
-        const stderr = decodeCapture(stderrCapture.bytes, snapshot.strictUtf8, "stderr");
-        if (exitState === undefined) {
-          throw processError("stream", "process exited without an observed result");
-        }
-        return { ...exitState, stdout, stderr };
-      };
+      if (timer !== undefined) clearTimeout(timer);
+      snapshot.signal?.removeEventListener("abort", onAbort);
+      await wait(exitObservation, PROCESS_CLEANUP_STEP_MS);
 
-      // Timeout is a fixed initiating result: late observations do not replace
-      // it. Capture/completion failure keeps its own reason when it started first.
-      if (failureState?.cause === "timeout" || failureState?.cause === "failed") {
-        throw failureState.error;
-      }
-
-      if (failureState?.cause === "cancelled") {
-        // Cleanup owns physical termination; collect its terminal observation
-        // before applying the fixed post-cancellation precedence.
-        await exitObservation;
-        // Foundation precedence after cancellation: decode failure, then a
-        // recorded completion/capture failure, then independently observed
-        // numeric nonzero. A cancellation-induced signal alone stays cancelled.
+      let decodeFailure: ProcessRuntimeError | undefined;
+      let stdout = "";
+      let stderr = "";
+      if (captureReads !== undefined) {
         try {
-          const result = decode();
-          if (completionFailure !== undefined) {
-            throw completionFailure.error;
-          }
-          if (result.exitCode !== null && result.exitCode !== undefined && result.exitCode !== 0) {
-            return result;
-          }
+          stdout = decodeCapture(captureReads[0].bytes, snapshot.strictUtf8, "stdout");
+          stderr = decodeCapture(captureReads[1].bytes, snapshot.strictUtf8, "stderr");
         } catch (cause) {
-          if (isProcessRuntimeError(cause)) {
-            throw cause;
-          }
-          throw errorFrom(cause, "stream", "captured output could not be decoded");
+          decodeFailure = new ProcessRuntimeError(
+            "invalid-output",
+            "captured output was not valid UTF-8",
+            { cause },
+          );
+          addLateFailureCode("invalid-output");
         }
-        throw failureState.error;
       }
 
-      try {
-        return decode();
-      } catch (cause) {
-        if (isProcessRuntimeError(cause)) {
-          throw cause;
-        }
-        throw errorFrom(cause, "stream", "captured output could not be decoded");
+      const outcome = classifyProcessOutcome({
+        initiatingFailure,
+        cleanupFailure,
+        decodeFailure,
+        lateFailureCodes,
+        observedExit,
+        completionRequestedBeforeExitObservation,
+        outputBounded,
+      });
+      if (outcome.kind === "error") {
+        throw outcome.error;
       }
+      const finalExit = observedExit as Exit | null;
+      if (finalExit === null) {
+        throw new ProcessRuntimeError("stream", "process exited without an observed result", {
+          facts: outcome.facts,
+        });
+      }
+      return {
+        ...finalExit,
+        stdout,
+        stderr,
+        facts: outcome.facts,
+      };
     },
   };
 };
