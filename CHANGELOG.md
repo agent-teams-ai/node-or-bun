@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 - 2026-10-18
+
+- Preserve bounded, successfully decoded stdout/stderr on
+  `ProcessRuntimeError.output` so consumers can classify late observed exits
+  without losing captured content. The nullable pair is copied, frozen and
+  non-enumerable; error messages and ordinary error JSON do not include it.
+- Keep first-cause settlement and capture/decode failure facts unchanged.
+- See the [0.2.1 migration note](https://github.com/agent-teams-ai/process-runtime/blob/main/docs/migration-0.2.0-to-0.2.1.md).
+
 ## 0.2.0 - 2026-10-18
 
 - Breaking: after a timeout or cancellation, late exit codes and decode

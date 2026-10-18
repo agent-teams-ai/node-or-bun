@@ -12,6 +12,7 @@ import {
   ProcessRuntimeError,
   isProcessRuntimeError,
   processError,
+  type ProcessCapturedOutput,
   type ProcessErrorCode,
   type ProcessInitiatingCause,
 } from "./errors.js";
@@ -311,12 +312,14 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       await wait(exitObservation, PROCESS_CLEANUP_STEP_MS);
 
       let decodeFailure: ProcessRuntimeError | undefined;
+      let output: ProcessCapturedOutput | null = null;
       let stdout = "";
       let stderr = "";
       if (captureReads !== undefined) {
         try {
           stdout = decodeCapture(captureReads[0].bytes, snapshot.strictUtf8, "stdout");
           stderr = decodeCapture(captureReads[1].bytes, snapshot.strictUtf8, "stderr");
+          output = { stdout, stderr };
         } catch (cause) {
           decodeFailure = new ProcessRuntimeError(
             "invalid-output",
@@ -335,6 +338,7 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
         observedExit,
         completionRequestedBeforeExitObservation,
         outputBounded,
+        output,
       });
       if (outcome.kind === "error") {
         throw outcome.error;
@@ -343,6 +347,7 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       if (finalExit === null) {
         throw new ProcessRuntimeError("stream", "process exited without an observed result", {
           facts: outcome.facts,
+          output,
         });
       }
       return {

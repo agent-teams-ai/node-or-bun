@@ -19,6 +19,7 @@ export {
   processError,
 } from "./errors.js";
 export type {
+  ProcessCapturedOutput,
   ProcessErrorCode,
   ProcessInitiatingCause,
   ProcessRuntimeErrorOptions,

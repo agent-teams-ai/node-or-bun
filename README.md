@@ -68,6 +68,14 @@ the observed `Exit`, late capture/decode failure codes, bounded-output status,
 and incomplete-custody status. Error messages do not include argv, environment,
 or captured output. The library never logs captured output automatically.
 
+`ProcessRuntimeError.output` retains `{ stdout, stderr }` after both bounded
+captures settle and decode successfully. It is `null` before capture, while a
+capture remains unsettled, or if either strict UTF-8 decode fails. Capture
+failures can leave bounded prefixes; inspect the error code and late failure
+facts before treating output as complete. The pair is copied and frozen, and
+the property is non-enumerable so ordinary error JSON/spread omits it. Explicit
+access or serialization of `error.output` still exposes captured content.
+
 ## What is not there
 
 - No runtime autodetect and no hidden adapter selection.

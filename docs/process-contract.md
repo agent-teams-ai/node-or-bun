@@ -65,6 +65,20 @@ late capture/decode failures as error codes; whether existing output limits
 bounded the capture; and, for cleanup failures, incomplete custody. The public
 surface contains no recursive `ProcessRuntimeError[]`.
 
+Since 0.2.1, `ProcessRuntimeError.output: ProcessCapturedOutput | null` also
+preserves decoded stdout and stderr when both bounded captures have settled
+and both decode successfully. The strings retain the existing 4 MiB per-stream
+byte capture limits. A capture failure or overflow can leave a prefix; use
+the error code and late failure codes to determine completeness. `null` means
+the pair is unavailable (including early launch/cancellation, an unsettled
+capture, or a strict decoding failure), rather than two empty streams.
+
+The error copies and freezes the pair. Its `output` property is non-enumerable
+and read-only, so ordinary JSON serialization and object spread of the error
+omit it. Explicit access, `JSON.stringify(error.output)` or a serializer that
+reads non-enumerable properties can expose it. Consumers own that decision;
+non-enumerability is not a security boundary.
+
 Error messages contain no argv, environment, or captured output. The library
 does not automatically log output. A timeout that starts cleanup remains
 `timeout` after successful cleanup. The same first-cause rule applies to
