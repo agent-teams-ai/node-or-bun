@@ -1,3 +1,5 @@
+import type { Exit } from "./contract.js";
+
 export type ProcessErrorCode =
   | "invalid-input"
   | "launch"
@@ -8,16 +10,36 @@ export type ProcessErrorCode =
   | "cancelled"
   | "cleanup";
 
+export type ProcessInitiatingCause =
+  | "launch"
+  | "timeout"
+  | "cancellation"
+  | "capture"
+  | "observation"
+  | "decode"
+  | "exit"
+  | null;
+
+export type ProcessRuntimeFacts = {
+  readonly initiatingCause: ProcessInitiatingCause;
+  readonly completionRequestedBeforeExitObservation: boolean;
+  readonly observedExit: Exit | null;
+  readonly lateFailureCodes: readonly ProcessErrorCode[];
+  readonly outputBounded: boolean;
+  readonly incompleteCustody: boolean;
+};
+
 export type ProcessRuntimeErrorOptions = {
   readonly cause?: unknown;
   readonly initiatingError?: unknown;
   readonly incompleteCustody?: boolean;
+  readonly facts?: Partial<ProcessRuntimeFacts>;
 };
 
 export class ProcessRuntimeError extends Error {
   readonly code: ProcessErrorCode;
   readonly initiatingError: unknown;
-  readonly incompleteCustody: boolean;
+  readonly facts: ProcessRuntimeFacts;
 
   constructor(
     code: ProcessErrorCode,
@@ -28,7 +50,20 @@ export class ProcessRuntimeError extends Error {
     this.name = "ProcessRuntimeError";
     this.code = code;
     this.initiatingError = options.initiatingError ?? null;
-    this.incompleteCustody = options.incompleteCustody ?? false;
+    this.facts = Object.freeze({
+      initiatingCause: options.facts?.initiatingCause ?? null,
+      completionRequestedBeforeExitObservation:
+        options.facts?.completionRequestedBeforeExitObservation ?? false,
+      observedExit: options.facts?.observedExit ?? null,
+      lateFailureCodes: Object.freeze([...(options.facts?.lateFailureCodes ?? [])]),
+      outputBounded: options.facts?.outputBounded ?? false,
+      incompleteCustody:
+        options.facts?.incompleteCustody ?? options.incompleteCustody ?? false,
+    });
+  }
+
+  get incompleteCustody(): boolean {
+    return this.facts.incompleteCustody;
   }
 }
 

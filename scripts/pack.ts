@@ -18,8 +18,8 @@ const packed = spawnSync(
     encoding: "utf8",
     env: {
       ...process.env,
-      npm_config_cache: resolve(".worker-tmp/cache/npm"),
-      npm_config_logs_dir: resolve(".worker-tmp/cache/npm-logs"),
+      npm_config_cache: resolve(".cache/npm"),
+      npm_config_logs_dir: resolve(".cache/npm-logs"),
       npm_config_update_notifier: "false",
     },
   },

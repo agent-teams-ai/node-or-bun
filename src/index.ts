@@ -18,5 +18,10 @@ export {
   isProcessRuntimeError,
   processError,
 } from "./errors.js";
-export type { ProcessErrorCode, ProcessRuntimeErrorOptions } from "./errors.js";
+export type {
+  ProcessErrorCode,
+  ProcessInitiatingCause,
+  ProcessRuntimeErrorOptions,
+  ProcessRuntimeFacts,
+} from "./errors.js";
 export { createProcessExecutor } from "./executor.js";

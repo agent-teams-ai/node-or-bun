@@ -59,7 +59,7 @@ jobs:
       - name: Retain tarball and hash
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: process-runtime-${{ matrix.os }}
+          name: node-or-bun-${{ matrix.os }}
           path: .worker-tmp/pack/
           if-no-files-found: error
 
@@ -84,7 +84,7 @@ jobs:
       - name: Upload exact tarball and hash
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: process-runtime-release-candidate
+          name: node-or-bun-release-candidate
           path: .worker-tmp/pack/
           if-no-files-found: error
       - name: Pack unsupported namespace bootstrap

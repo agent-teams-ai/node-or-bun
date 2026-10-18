@@ -21,3 +21,55 @@ Foundation ownership records, its QGR console wrapper, and the later
 unsupported namespace bootstrap are separate operator work. Installing this
 package is not a CMS adoption claim and this job does not rewrite historical
 ADR/input evidence.
+
+## Plan v4 successor scope
+
+The 0.2.0 change-set follows plan v4 sections 3.1 through 3.4 as supplied in
+the worker task contract. The exact retained section 3 input is identified by
+SHA256 `9312e8a097ebb64e2050cd1015fc12f729e059156ae0cea5f62472f999545d3a`.
+The worker input did not supply the canonical plan v4 document SHA256 and no
+accessible correction artifact contained it. The digest above is traceability
+for the retained task-contract scope, not a substitute for the missing
+canonical plan digest. The release therefore retains a plan-identity gap in
+addition to the section 3.4 gap below.
+
+The candidate canonical plan v4 document digest, computed 2026-10-18 from the
+operator-held plan document, is SHA256
+`4f30324e74e31055fc06796c6ea6b6e44ba72a1080dcee62e8fa7479b485a507`. It is
+recorded for traceability only and does not close the plan-identity gap until
+the owner confirms it as canonical.
+
+The N/E TEST comparison surface (Execa adapter, `./execa` subpath) exists only
+in the N/E change-set and is excluded from 0.2.0; the accepted change-set
+contains no Execa and no new subpaths.
+
+The N/E decision record dated 2026-10-17 chose N literally. Variant E is not
+accepted: Execa is absent, the change-set removes the production
+`dependencies` key entirely (zero production dependencies), and the
+existing native Node and Bun adapters carry the shared section 3.2 classifier
+and section 3.3 lifecycle. The accepted v3 record above remains unchanged.
+
+## Section 3.4 consumer-profile result
+
+Consumer-profile decision: NONE APPLICABLE - recorded as an unresolved gap per plan v4 3.4.6: the narrowest candidate (development-only path: TypeScript Node preset + assert-dev-only) is rejected because agent-teams-foundation assert-dev-only requires an exact pnpm 11 packageManager pin and assert-registry requires a parseable pnpm-lock.yaml, while this repository is explicitly npm-managed with package-lock.json authoritative. Per plan v4 3.4.6 this gap is release-blocking; the single authoritative status and decision point are "Section 3.4 gap status" below.
+
+The section 3.4 output is NOT integrated as a dependency. Plan v4 3.4.2 asks
+for an exact development dependency on Foundation, but this repository's
+AGENTS.md states the repository must not depend on Engineering Foundation, and
+the repository policy is the current authority. Per plan v4 3.4.4 the delta is
+recorded explicitly: the Foundation pin is not applied and the consumer profile
+is not applied. There is no production import, no development dependency on
+Foundation, and no invented CI, architecture, or docs consumer profile.
+
+Section 3.4 gap status (updated 2026-10-18, plan v4 3.4.6) - authoritative
+decision record for release operators: the gap is OPEN, release-blocking,
+and NOT accepted. No acceptance exists yet. The operator did not resolve it:
+no consumer profile is applied, and the Foundation development pin is
+withheld under the AGENTS.md policy above. Two owner options remain: accept
+the recorded gap as a delta for 0.2.0 (optionally granting a policy exception
+to add the exact development pin), or migrate the repository toolchain to
+pnpm 11 with pnpm-lock.yaml so a Foundation profile becomes applicable. The
+0.2.0 release must not publish before the owner records this choice
+explicitly; the npm publish authentication stop is where the owner is present
+and can record it. Preparation may proceed up to that stop; publishing may
+not.
