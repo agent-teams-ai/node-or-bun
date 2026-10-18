@@ -33,9 +33,10 @@ Requests are snapshotted at entry. An omitted environment inherits an adapter
 snapshot; a supplied map is exact. NUL bytes, an empty executable/cwd, malformed
 strings, and a deadline outside integer 1..2,147,483,647 reject before launch.
 
-The adapter owns spawn, terminal observation, native readers, and
-`closeCapture()`. Shared code owns capture limits, classification, settlement,
-timers, and direct-child cleanup. Foundation Host owns POSIX process groups,
+The adapter owns spawn, terminal observation, native readers,
+`closeCapture()`, and the capture-close deadline. Shared code owns capture
+limits, classification, settlement, the settlement and EOF timers, and
+direct-child cleanup. Foundation Host owns POSIX process groups,
 Windows Job Objects, the managed wrapper protocol, and tree cleanup after
 leader exit. Default library cleanup is direct-child only.
 Hosts translate the fixed classification codes at their own boundary; this
@@ -67,8 +68,9 @@ surface contains no recursive `ProcessRuntimeError[]`.
 Error messages contain no argv, environment, or captured output. The library
 does not automatically log output. A timeout that starts cleanup remains
 `timeout` after successful cleanup. The same first-cause rule applies to
-cancellation and capture/observation failures. Late observations remain facts
-and do not replace the initiating settlement.
+cancellation and capture/observation failures. Late exit observations and late
+capture/decode failures are retained as facts; a late observation failure is
+not retained as a fact. No late fact replaces the initiating settlement.
 
 Detached children created with `setsid` and arbitrary descendant trees are not
 promised by the default adapter.

@@ -54,7 +54,6 @@
     "check": "npm run verify-toolchain && npm run typecheck && npm run test && npm run test:node-under-bun && npm run pack && npm run qualify"
   },
   "devDependencies": {
-    "@agent-teams/engineering-foundation": "1.7.4",
     "@types/bun": "1.4.3",
     "@types/node": "26.6.5",
     "typescript": "7.0.2"

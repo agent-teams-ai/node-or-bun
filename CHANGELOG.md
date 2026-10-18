@@ -1,7 +1,10 @@
 # Changelog
 
-## 0.2.0 - 2026-10-17
+## 0.2.0 - 2026-10-18
 
+- Breaking: after a timeout or cancellation, late exit codes and decode
+  failures no longer settle the result; they are reported in
+  `ProcessRuntimeError.facts`. See `docs/migration-0.1-to-0.2.md`.
 - Rename the package to `node-or-bun` while preserving `.`, `/node`, `/bun`,
   and `/testing`.
 - Apply the fixed facts-outside lifecycle and cancellation semantics to the
@@ -11,8 +14,9 @@
 - Rewrite synthetic cancellation conformance and document observable cleanup
   guarantees and explicit limitations.
 - Add the 0.1-to-0.2 migration guide.
-- Pin `@agent-teams/engineering-foundation` `1.7.4` as an exact development
-  dependency; production dependencies remain empty.
+- Remove the empty `dependencies` key; there are zero production dependencies.
+  No dependency on Engineering Foundation is added (repository policy); the
+  section 3.4 consumer-profile gap stays recorded in `docs/plan-scope.md`.
 
 ## 0.1.0 - 2026-10-14
 

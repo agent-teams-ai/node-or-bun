@@ -209,6 +209,9 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
             },
           );
         }
+        if (isProcessRuntimeError(cause)) {
+          throw cause;
+        }
         throw new ProcessRuntimeError("launch", "process launch failed", {
           cause,
           initiatingError: cause,
