@@ -29,17 +29,25 @@ export type ProcessRuntimeFacts = {
   readonly incompleteCustody: boolean;
 };
 
+export type ProcessCapturedOutput = {
+  readonly stdout: string;
+  readonly stderr: string;
+};
+
 export type ProcessRuntimeErrorOptions = {
   readonly cause?: unknown;
   readonly initiatingError?: unknown;
   readonly incompleteCustody?: boolean;
   readonly facts?: Partial<ProcessRuntimeFacts>;
+  readonly output?: ProcessCapturedOutput | null;
 };
 
 export class ProcessRuntimeError extends Error {
   readonly code: ProcessErrorCode;
   readonly initiatingError: unknown;
   readonly facts: ProcessRuntimeFacts;
+  /** Bounded decoded captures, or null if either capture/decode is unavailable. */
+  declare readonly output: ProcessCapturedOutput | null;
 
   constructor(
     code: ProcessErrorCode,
@@ -50,6 +58,16 @@ export class ProcessRuntimeError extends Error {
     this.name = "ProcessRuntimeError";
     this.code = code;
     this.initiatingError = options.initiatingError ?? null;
+    // Keep captured content out of ordinary error enumeration/JSON. Explicit
+    // access is still sensitive and callers decide whether to expose it.
+    Object.defineProperty(this, "output", {
+      value: options.output == null
+        ? null
+        : Object.freeze({ stdout: options.output.stdout, stderr: options.output.stderr }),
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    });
     this.facts = Object.freeze({
       initiatingCause: options.facts?.initiatingCause ?? null,
       completionRequestedBeforeExitObservation:

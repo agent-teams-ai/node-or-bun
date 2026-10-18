@@ -1,6 +1,7 @@
 import type { Exit } from "../contract.js";
 import {
   ProcessRuntimeError,
+  type ProcessCapturedOutput,
   type ProcessErrorCode,
   type ProcessInitiatingCause,
   type ProcessRuntimeFacts,
@@ -20,6 +21,7 @@ export type ClassificationInput = {
   readonly observedExit: Exit | null;
   readonly completionRequestedBeforeExitObservation: boolean;
   readonly outputBounded: boolean;
+  readonly output: ProcessCapturedOutput | null;
 };
 
 const facts = ({
@@ -29,7 +31,7 @@ const facts = ({
   completionRequestedBeforeExitObservation,
   outputBounded,
   incompleteCustody,
-}: Omit<ClassificationInput, "cleanupFailure"> & {
+}: Omit<ClassificationInput, "cleanupFailure" | "output"> & {
   readonly incompleteCustody: boolean;
 }): ProcessRuntimeFacts =>
   Object.freeze({
@@ -54,6 +56,7 @@ export const classifyProcessOutcome = ({
   observedExit,
   completionRequestedBeforeExitObservation,
   outputBounded,
+  output,
 }: ClassificationInput):
   | { readonly kind: "result"; readonly facts: ProcessRuntimeFacts }
   | { readonly kind: "error"; readonly error: ProcessRuntimeError } => {
@@ -69,6 +72,7 @@ export const classifyProcessOutcome = ({
     return {
       kind: "error",
       error: new ProcessRuntimeError("cleanup", "process cleanup did not complete", {
+        output,
         cause: cleanupFailure.reason,
         initiatingError: initiatingFailure?.error ?? null,
         facts: facts({ ...shared, incompleteCustody: true }),
@@ -83,6 +87,7 @@ export const classifyProcessOutcome = ({
         initiatingFailure.code,
         initiatingFailure.error.message,
         {
+          output,
           cause: initiatingFailure.error.cause,
           initiatingError: initiatingFailure.error,
           facts: facts({ ...shared, incompleteCustody: false }),
@@ -95,6 +100,7 @@ export const classifyProcessOutcome = ({
     return {
       kind: "error",
       error: new ProcessRuntimeError("invalid-output", decodeFailure.message, {
+        output,
         cause: decodeFailure.cause,
         initiatingError: decodeFailure,
         facts: {

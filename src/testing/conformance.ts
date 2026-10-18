@@ -139,8 +139,8 @@ const runArbitrationCases = async (): Promise<void> => {
     const exit = deferred<Exit>();
     const running = syntheticRunning(
       exit.promise,
-      syntheticStream(),
-      syntheticStream(),
+      syntheticStream([new TextEncoder().encode("cancelled stdout\né")]),
+      syntheticStream([new TextEncoder().encode("cancelled stderr\n")]),
       async () => {
         exit.resolve({ exitCode: 17, signal: null });
       },
@@ -160,6 +160,26 @@ const runArbitrationCases = async (): Promise<void> => {
       error.facts.observedExit?.exitCode === 17,
       "cancellation arbitration lost the observed Exit fact",
     );
+    const output = error.output;
+    assert(output?.stdout === "cancelled stdout\né", "cancellation lost captured stdout");
+    assert(output?.stderr === "cancelled stderr\n", "cancellation lost captured stderr");
+    assert(Object.isFrozen(output), "captured output can be mutated");
+    for (const diagnostic of [error.message, error.stack ?? "", JSON.stringify(error), JSON.stringify({ ...error })]) {
+      assert(!diagnostic.includes("cancelled stdout"), "ordinary error diagnostics exposed stdout");
+      assert(!diagnostic.includes("cancelled stderr"), "ordinary error diagnostics exposed stderr");
+    }
+  }
+
+  // Detects: storing the caller's mutable object lets later writes replace
+  // captured facts, or leak unrelated properties through explicit output access.
+  {
+    const suppliedOutput = { stdout: "original stdout", stderr: "original stderr", extra: "private" };
+    const error = new ProcessRuntimeError("cancelled", "cancelled", { output: suppliedOutput });
+    suppliedOutput.stdout = "changed stdout";
+    suppliedOutput.stderr = "changed stderr";
+    assert(error.output?.stdout === "original stdout", "captured stdout was not snapshotted");
+    assert(error.output?.stderr === "original stderr", "captured stderr was not snapshotted");
+    assert(error.output !== null && !("extra" in error.output), "output retained unrelated caller data");
   }
 
   // Detects: cancellation must not hide a later capture failure.
@@ -220,6 +240,7 @@ const runArbitrationCases = async (): Promise<void> => {
       error.facts.lateFailureCodes.includes("invalid-output"),
       "later decode failure was not preserved as a neutral code",
     );
+    assert(error.output === null, "strict decode failure exposed a partial decoded output pair");
   }
 
   // Detects: an abnormal read settlement must finish through native close, but
@@ -476,6 +497,7 @@ export const runProcessRuntimeConformance = async (
   );
   assert(overflowFailure.facts.initiatingCause === "capture", "overflow lost its capture classification");
   assert(overflowFailure.facts.outputBounded, "overflow lost bounded-output status");
+  assert(overflowFailure.output?.stdout.length === 4 * 1024 * 1024, "error output lost its bounded capture prefix");
   await expectError("invalid-input", async () => {
     options.adapterFactory("partial-hooks");
   });
@@ -520,12 +542,13 @@ export const runProcessRuntimeConformance = async (
   const marker = `${options.workingDirectory}/pre-abort-marker`;
   const controller = new AbortController();
   controller.abort();
-  await expectError("cancelled", () =>
+  const preAbortError = await expectError("cancelled", () =>
     run(options, "normal", {
       ...request(options, "touch", { args: [options.fixturePath, "touch", marker] }),
       signal: controller.signal,
     }),
   );
+  assert(preAbortError.output === null, "pre-abort error invented captured output");
   try {
     const { readFile } = await import("node:fs/promises");
     await readFile(marker);
@@ -610,6 +633,7 @@ export const runProcessRuntimeConformance = async (
     );
     assert(closeRequested, "unclosed capture did not reach native close");
     assert(error.incompleteCustody, "unclosed capture claimed release");
+    assert(error.output === null, "unsettled capture invented decoded output");
     assert(
       error.cause instanceof Error && error.cause.message === "synthetic native close failed",
       "unclosed capture lost the native close failure",

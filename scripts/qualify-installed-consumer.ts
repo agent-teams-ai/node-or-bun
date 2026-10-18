@@ -12,7 +12,7 @@ const argument = (name: string): string | undefined => {
 const runtimeArgument = argument("runtime");
 const runtimes: Runtime[] =
   runtimeArgument === undefined ? ["node", "bun"] : [runtimeArgument === "bun" ? "bun" : "node"];
-const archive = resolve(argument("archive") ?? ".worker-tmp/pack/node-or-bun-0.2.0.tgz");
+const archive = resolve(argument("archive") ?? ".worker-tmp/pack/node-or-bun-0.2.1.tgz");
 
 const runCommand = (
   command: string,
