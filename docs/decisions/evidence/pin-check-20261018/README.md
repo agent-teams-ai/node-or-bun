@@ -1,7 +1,12 @@
 # Pin-check evidence — source and link manifest
 
-Every file in this directory is a byte copy verified by `SHA256SUMS`. The
-copies are evidence snapshots; they are not rewritten for this repository.
+The upstream snapshots (`common-assembly.current.md` and all `*.diff` and
+`*.log.txt` files) are byte copies of their sources, verified by `SHA256SUMS`;
+they are evidence snapshots and are not rewritten for this repository.
+Exceptions in this directory: `README.md` is this manifest (local metadata),
+`SHA256SUMS` is the checksum manifest of the snapshots, and
+`pin-check-report.md` is local command output of the pin check, not an upstream
+copy.
 
 ## Sources
 
