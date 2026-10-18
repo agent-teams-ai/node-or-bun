@@ -30,14 +30,13 @@ SHA256 `9312e8a097ebb64e2050cd1015fc12f729e059156ae0cea5f62472f999545d3a`.
 The worker input did not supply the canonical plan v4 document SHA256 and no
 accessible correction artifact contained it. The digest above is traceability
 for the retained task-contract scope, not a substitute for the missing
-canonical plan digest. The release therefore retains a plan-identity gap in
-addition to the section 3.4 gap below.
+canonical plan digest. This initially left a plan-identity gap in addition to
+the section 3.4 gap below.
 
-The candidate canonical plan v4 document digest, computed 2026-10-18 from the
-operator-held plan document, is SHA256
-`4f30324e74e31055fc06796c6ea6b6e44ba72a1080dcee62e8fa7479b485a507`. It is
-recorded for traceability only and does not close the plan-identity gap until
-the owner confirms it as canonical.
+The canonical plan v4 document digest is SHA256
+`4f30324e74e31055fc06796c6ea6b6e44ba72a1080dcee62e8fa7479b485a507`. It was
+computed 2026-10-18 from the operator-held plan document, and the owner
+confirmed it as canonical on 2026-10-18, closing the plan-identity gap.
 
 The N/E TEST comparison surface (Execa adapter, `./execa` subpath) exists only
 in the N/E change-set and is excluded from 0.2.0; the accepted change-set
@@ -53,7 +52,7 @@ The full decision record with input facts and rule application is
 
 ## Section 3.4 consumer-profile result
 
-Consumer-profile decision: NONE APPLICABLE - recorded as an unresolved gap per plan v4 3.4.6: the narrowest candidate (development-only path: TypeScript Node preset + assert-dev-only) is rejected because agent-teams-foundation assert-dev-only requires an exact pnpm 11 packageManager pin and assert-registry requires a parseable pnpm-lock.yaml, while this repository is explicitly npm-managed with package-lock.json authoritative. Per plan v4 3.4.6 this gap is release-blocking; the single authoritative status and decision point are "Section 3.4 gap status" below.
+Consumer-profile decision: NONE APPLICABLE - recorded as an unresolved gap per plan v4 3.4.6: the narrowest candidate (development-only path: TypeScript Node preset + assert-dev-only) is rejected because agent-teams-foundation assert-dev-only requires an exact pnpm 11 packageManager pin and assert-registry requires a parseable pnpm-lock.yaml, while this repository is explicitly npm-managed with package-lock.json authoritative. Per plan v4 3.4.6 this gap was release-blocking until the owner decision recorded below; the single authoritative status and decision point are "Section 3.4 gap status" below.
 
 The section 3.4 output is NOT integrated as a dependency. Plan v4 3.4.2 asks
 for an exact development dependency on Foundation, but this repository's
@@ -64,14 +63,12 @@ is not applied. There is no production import, no development dependency on
 Foundation, and no invented CI, architecture, or docs consumer profile.
 
 Section 3.4 gap status (updated 2026-10-18, plan v4 3.4.6) - authoritative
-decision record for release operators: the gap is OPEN, release-blocking,
-and NOT accepted. No acceptance exists yet. The operator did not resolve it:
-no consumer profile is applied, and the Foundation development pin is
-withheld under the AGENTS.md policy above. Two owner options remain: accept
-the recorded gap as a delta for 0.2.0 (optionally granting a policy exception
-to add the exact development pin), or migrate the repository toolchain to
-pnpm 11 with pnpm-lock.yaml so a Foundation profile becomes applicable. The
-0.2.0 release must not publish before the owner records this choice
-explicitly; the npm publish authentication stop is where the owner is present
-and can record it. Preparation may proceed up to that stop; publishing may
-not.
+decision record for release operators: the owner recorded the decision at the
+npm publish authentication stop on 2026-10-18 and chose to accept the recorded
+gap as a delta for 0.2.0 without any Foundation development pin. The gap is
+ACCEPTED AS DELTA and is no longer release-blocking: no consumer profile is
+applied, no Foundation development dependency is added, the repository
+toolchain remains npm with package-lock.json authoritative, and the delta in
+the section 3.4 result above is the recorded form of this gap. Migration to
+pnpm 11 with pnpm-lock.yaml was not chosen and remains a separate future
+option if a Foundation consumer profile later becomes required.
