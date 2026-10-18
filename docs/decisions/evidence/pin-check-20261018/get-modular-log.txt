@@ -1,0 +1,20 @@
+ccd815e fix(research): close observation review gaps (#183)
+447d459 test: qualify shared capacity and independent workload cleanup (#193)
+930f301 test: qualify inherited-map growth within fixed compiler bounds (#192)
+eb1ad98 test: retain public source graph qualification research (#191)
+f155027 test: qualify durable recovery and retained process custody (#190)
+f97a9e6 test: qualify retained consumer lifetime and retry (#189)
+33f9ad5 test: qualify connected public consumer fixtures (#188)
+132317e docs: clarify fixture handoff and record-size bound (#187)
+4773f6e docs: plan module fixtures and scale experiments (#184)
+a3a079b docs(research): file the module communication study and the observation API design evidence
+a20d261 fix(codemod): keep or report comments inside rewritten isolate calls (#181)
+7774970 docs(research): retain the 0.5.0 train release archives (#180)
+99816e4 chore(release): prepare Core and Assembly 0.5.0, conformance 0.3.0 (#178)
+a6fb863 docs(changeset): align the 0.5.0 changesets with the migration form (#179)
+bcd4c9a docs(architecture): revise the Consumer Module Standard and add the module authoring guide (#176)
+ca879f7 feat(conformance): check that capability ports keep members on the instance (#177)
+2f33631 feat(assembly): compose roots from module entries and static groups (#175)
+ab41023 feat(conformance): add the wiring oracle and module layout checks (#174)
+018d7b7 docs(research): record the module entries spike
+bfb7cff docs(research): file the 0.5.0 module DX train plan and the nested features draft

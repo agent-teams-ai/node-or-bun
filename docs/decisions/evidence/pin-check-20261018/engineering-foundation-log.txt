@@ -1,0 +1,13 @@
+43dbe8084 feat: expose bounded source graph facts (#407)
+9a950bd31 feat(release): prove the bootstrap commit passed CI instead of re-running pnpm check (#405)
+dbecf5d8e fix(engineering-foundation): give the growth git calls a 60 second deadline (#406)
+a7e18f733 fix(docs-protocol-agent-teams): keep both output tails when the consumer upgrade process fails (#404)
+f3b558990 fix(release): use an empty user npmrc for the bootstrap install and check (#403)
+5919c424d fix(release): give the npm bootstrap job enough time for the serial check (#402)
+b76ced41e fix(release): run the quality scope check after the workspace is built (#401)
+5805cbc31 feat(feature-module-standard): add the opt-in Feature Module Standard kernel and fixtures
+73c3814d1 feat: findings baseline, growth budgets, public source graph and FMS v1.1 in source coverage
+6b2e67bdc chore(standards): pin the quality standard at the Feature Module Standard v1.1 publication
+5a4efcf75 docs(architecture): admit shared concerns library-first
+69623f2a1 docs(architecture): record the architecture-neutrality rule and its exception
+85243c89e docs(governance): let the merging agent choose the independent review

@@ -1,0 +1,984 @@
+diff --git a/docs/architecture/feature-module-standard/README.md b/docs/architecture/feature-module-standard/README.md
+index b89c695..e3edd80 100644
+--- a/docs/architecture/feature-module-standard/README.md
++++ b/docs/architecture/feature-module-standard/README.md
+@@ -3,10 +3,15 @@
+ The [Feature Module Standard v1](v1.md) is the accepted immutable organization
+ baseline for feature-owned capability slices.
+ 
+-Repositories adopt it explicitly through a repository-owned local profile. The
+-profile maps the standard to local topology, records extensions and deviations,
+-and names deterministic enforcement commands. Organization membership alone
+-does not imply adoption.
++[Feature Module Standard v1.1](v1.1.md) is a minor successor that adds
++sub-features and composition contracts. Its new requirements apply only to a
++module that contains a sub-feature or whose profile declares a composition
++contract.
++
++Repositories adopt a version explicitly through a repository-owned local
++profile. The profile maps the standard to local topology, records extensions
++and deviations, and names deterministic enforcement commands. Organization
++membership alone does not imply adoption.
+ 
+ The machine-readable version and digest registry is
+ [`governance/feature-module-standard.json`](../../../governance/feature-module-standard.json).
+diff --git a/docs/architecture/feature-module-standard/v1.1.md b/docs/architecture/feature-module-standard/v1.1.md
+new file mode 100644
+index 0000000..bd949a9
+--- /dev/null
++++ b/docs/architecture/feature-module-standard/v1.1.md
+@@ -0,0 +1,827 @@
++# Feature Module Standard v1.1
++
++Status: Accepted and immutable
++
++Standard ID: `agent-teams.feature-module-standard`
++
++Version: `v1.1`
++
++Predecessor: `v1`
++
++Owner: Agent Teams organization maintainers
++
++Published: 2026-10-16
++
++## Purpose
++
++This standard defines a language-neutral architecture for feature-owned
++capability slices inside explicitly owned production modules. It separates
++business meaning, use-case coordination, external integration, and composition
++without requiring one programming language, framework, build system, or
++deployment model.
++
++The standard is intentionally independent of repository names, package managers,
++directory roots, transport technologies, dependency-injection frameworks, and
++conformance implementations. Each adopting repository maps these rules to its
++own topology through a local adoption profile.
++
++## Normative language
++
++The terms MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are normative. Text without
++one of those terms explains intent or supplies examples.
++
++Version `v1.1` is byte-immutable. Corrections or changed requirements are
++published as a successor version. Existing adopters continue to reference their
++pinned version until they explicitly adopt a successor.
++
++Version `v1.1` is a minor successor of `v1`. It adds sub-features, composition
++contracts and the rules they need. Every new requirement applies only to a
++production module that contains a sub-feature or whose profile declares a
++composition contract; for any other module, every `v1` requirement is
++unchanged. A repository that conforms to `v1` and declares neither conforms to
++`v1.1` once its profile pins `v1.1`.
++
++## Adoption contract
++
++This standard does not apply to a repository merely because the repository
++belongs to the Agent Teams organization. Adoption is explicit.
++
++An adopting repository MUST maintain one local profile that identifies:
++
++- this standard by ID, version, canonical repository path, and content digest;
++- the production roots, module roots, application roots, and excluded roots in
++  scope;
++- the repository-specific mapping from the abstract layout in this standard;
++- every sub-feature with its parent, every republication edge, and every
++  composition contract, where the repository has any;
++- local extensions, including language, packaging, transport, and composition
++  rules;
++- every deliberate deviation, with its scope, rationale, owner, and review
++  trigger;
++- the exact deterministic commands that enforce the adopted rules;
++- the local architecture document and decision records that own repository
++  specifics.
++
++The profile MUST NOT copy this standard and present the copy as a second
++authority. It MAY repeat a short rule only when necessary to explain a stricter
++local constraint.
++
++A repository MUST NOT claim conformance unless its profile is reachable from the
++repository documentation entry point and the declared enforcement commands run
++in its required quality gate.
++
++Local profiles MAY strengthen this standard. A local profile MAY deviate only by
++recording an explicit deviation. Silence is adoption of the central rule, not an
++implicit exception.
++
++## Architecture hierarchy
++
++```text
++repository
++  -> production module with one architectural role
++      -> feature-owned capability slice
++          -> optional sub-features, each a feature-owned capability slice
++          -> role-appropriate internal layers
++              -> operations and behavior
++```
++
++A production module is a hard ownership and dependency boundary. Depending on
++the repository, it may be a workspace package, library, service, executable
++component, or another locally enforced module kind.
++
++A feature is a cohesive domain or technical capability inside one module. A
++feature is not an independent bounded context, service, or package by default.
++A use case is one operation. Repositories MUST NOT create one module per endpoint
++or one feature per class.
++
++A sub-feature is a feature inside another feature, its parent. A production
++module or package is a unit of reuse and distribution; a feature at any depth
++is a unit of meaning and ownership. A sub-feature is not a module, a bounded
++context or a package by default.
++
++## Universal feature ownership
++
++All production behavior inside an adopted production module MUST belong to an
++explicit feature-owned capability slice.
++
++A module-level source root MAY contain only:
++
++- a curated public module entry point;
++- composition that wires feature public entry points;
++- module-level Published Language or migration assembly that indexes
++  feature-owned artifacts without redefining them;
++- generated artifacts in an explicitly isolated generated directory;
++- narrowly scoped primitives whose ownership genuinely cannot belong to one
++  feature.
++
++The final exception MUST be approved by a repository-owned architecture
++decision. Broad `shared`, `common`, `utils`, `services`, `core`, or
++`infrastructure` directories are not valid substitutes for feature ownership.
++
++Feature ownership is structural while modeling depth is semantic:
++
++- domain capabilities use the tactical domain modeling and internal layers
++  required by their invariants;
++- integration capabilities own provider contracts, mappings, ports, and adapters
++  without inventing a business domain model;
++- platform capabilities own stable technical ports and implementation behavior
++  without pretending infrastructure is a business domain;
++- SDK capabilities are sliced by public client capability and own contracts,
++  operations, mappings, and tests;
++- testing capabilities own reusable fixtures, conformance suites, and harnesses
++  by the capability they validate.
++
++A module MUST begin with at least one real feature. It MUST NOT postpone feature
++ownership until it becomes large. Empty feature, layer, or package scaffolding is
++prohibited.
++
++## Abstract repository layout
++
++An adopting profile MUST map its concrete directories to these abstract roles:
++
++```text
++<production-module>/
++  <source-root>/
++    features/
++      <feature>/
++        features/
++          <sub-feature>/
++    <module-composition>/
++    <public-entrypoint>
++  <test-root>/
++    features/
++      <feature>/
++        features/
++          <sub-feature>/
++    module/
++
++<application-root>/
++  <composition-root>/
++```
++
++The nested `features` directories below a feature exist, and a profile maps
++them, only when the module contains a sub-feature.
++
++Application executables SHOULD remain thin composition roots. They may assemble
++features, transports, process-wide resources, and lifecycle handling, but MUST
++NOT become an alternative owner of behavior already owned by a production
++module.
++
++Executable clients belong in application roots. Distributable client libraries
++belong in explicitly supported SDK modules. Protocol clients used only by one
++adapter SHOULD remain inside that adapter until reuse or lifecycle evidence
++justifies extraction.
++
++## Feature layout
++
++A domain-capability feature may use the following role-oriented layout:
++
++```text
++features/<feature>/
++  contracts/
++  domain/
++    aggregates/
++    services/
++    policies/
++    specifications/
++    errors/
++  application/
++    models/
++    use-cases/
++    policies/
++    ports/
++      inbound/
++      outbound/
++  adapters/
++    inbound/
++    outbound/
++  composition/
++  features/
++    <sub-feature>/
++```
++
++This is not a mandatory folder template. A directory MUST exist only when it
++contains a real owned artifact. A pure integration, platform, SDK, or testing
++feature MAY use a smaller role-appropriate layout without a domain aggregate.
++
++The `features` directory of a feature exists only when the feature has a
++sub-feature. Section Sub-features defines it.
++
++Aggregate-specific entities, value objects, factories, and domain events SHOULD
++be colocated with their aggregate. Feature-level policy, service,
++specification, error, or value-object directories SHOULD exist only when the
++concept is genuinely shared by several aggregates inside the feature.
++
++A user-interface action or verb is not automatically a separate feature. The
++feature that owns the business invariant MUST own every mutation of its
++aggregate.
++
++## Sub-features
++
++A feature MAY contain sub-features. A sub-feature keeps a tightly related part
++of its parent together with the parent, so the parent and its sub-features move
++as one unit, like a subdomain or a sub-assembly. Every rule of this standard
++that applies to a feature applies to a sub-feature unless this section says
++otherwise. Every requirement in this section applies only to a production
++module that contains a sub-feature.
++
++A production module contains a sub-feature when its profile declares one. In
++any other module, a directory inside a feature root keeps its `v1` meaning,
++whatever its name.
++
++### Terms
++
++- The parent of a sub-feature is the feature that directly contains it. A
++  top-level feature has no parent feature; the production module is its scope.
++- Ancestors, descendants and subtrees follow the parent relation. The subtree
++  of a feature is the feature with all its descendants.
++- Depth is 1 for a top-level feature and grows by 1 for each level below it.
++- The public entrypoint, the internal API and the composition surface of a
++  feature are the curated surfaces this standard already defines: the public
++  entrypoint exposes the feature's public contracts, the internal API serves
++  other features of the same module, and the composition surface is the
++  narrow typed factory or equivalent constructor surface that composition
++  wires.
++- The composition contract of a feature, where the profile declares one, is a
++  curated surface that exposes only the identifiers, descriptors and type
++  declarations that composition uses to connect the providers and consumers
++  of the feature's capabilities. Section Composition contracts defines it.
++
++### Placement and layout
++
++- A sub-feature root MUST be `<parent root>/features/<name>/`. The `features`
++  directory inside a feature root is the sub-feature container. It MUST
++  contain only sub-feature directories and MUST exist only when it holds one.
++- The feature layout applies at every depth. Each direct entry of a feature
++  root MUST be the sub-feature container, a directory the profile maps to a
++  role of the feature layout or of a smaller role-appropriate layout, or a
++  file the profile maps, such as a feature README or a curated entrypoint.
++- This standard sets no maximum depth. A profile MAY declare a depth at which
++  its gate warns.
++- A sub-feature MUST be a real capability slice. Repositories MUST NOT create a
++  sub-feature merely to isolate a folder, to hold one class, or as scaffolding.
++
++One container name at every level keeps the layout self-similar: a feature
++directory moves between levels unchanged, feature names never collide with
++role names, and a checker resolves every path below a feature root with one
++rule, because the first segment is a role, the container, or a mapped file.
++
++### Identity
++
++- The identity of a top-level feature is its name. The identity of a
++  sub-feature is its parent's identity followed by its own name, for example
++  `orders/discounts`. Names MUST be unique among the sub-features of one
++  parent and among the top-level features of one module.
++- Moving a feature changes its identity and its root. Identifiers that a
++  repository publishes for other purposes, such as composition, capability or
++  module identifiers, are governed by the rules that own them. This standard
++  does not require them to change when a feature moves or to match feature
++  identities.
++
++### Visibility
++
++- A top-level feature is visible to every feature of its production module. A
++  sub-feature is visible only to its parent and to the parent's descendants.
++- Code MUST NOT depend on a feature that is not visible to it. Code outside a
++  parent's subtree, code in another production module, and module or
++  application composition reach a sub-feature only through what an ancestor
++  republishes.
++- Visibility permits only curated surfaces: the public entrypoint, the
++  internal API where this standard allows it, the composition contract from
++  composition code, the composition surface for assembly, and testing
++  surfaces from test code. Deep imports into another feature remain
++  prohibited at every depth.
++
++### Edges
++
++For code of a feature S that depends on a different feature T:
++
++- an upward edge targets an ancestor of S;
++- a downward edge targets a sub-feature whose parent is S;
++- a lateral edge targets any other feature visible to S.
++
++By purpose, an edge is one of:
++
++- a use edge, which depends on the public entrypoint of T, on the internal
++  API of T where this standard allows it, or on the composition contract of T
++  from composition code;
++- an assembly edge, which wires the composition surface of T;
++- a republication edge, which re-exports part of the public entrypoint or of
++  the composition contract of T from the same surface of S.
++
++A feature MAY use the public entrypoints of its ancestors, of its direct
++sub-features and of every other feature visible to it. Every use edge MUST be
++declared in the module's feature dependency graph.
++
++### Assembly
++
++- Only the feature composition of a parent MAY wire the composition surface of
++  a sub-feature, and only of its direct sub-features. Module composition and
++  application composition MUST NOT wire the composition surface of a
++  sub-feature.
++- A parent MUST wire, in its feature composition, every direct sub-feature
++  that exposes a composition surface. The assembled structure therefore
++  mirrors the feature tree.
++
++### Republication
++
++- A parent MAY republish parts of the public entrypoint of a direct
++  sub-feature from its own public entrypoint, and parts of the composition
++  contract of a direct sub-feature from its own composition contract.
++  Republication re-exports without adding behavior, mapping or types. The
++  sub-feature remains the semantic owner of what it publishes.
++- Every republication edge MUST be declared in the profile. A feature MUST NOT
++  republish from a descendant that is not its direct sub-feature; a deeper
++  contract reaches outward one level at a time.
++- Republication is the only way a contract of a sub-feature becomes visible
++  outside the subtree of its parent.
++
++### Dependency graph and cycles
++
++- The cycle graph of a module consists of the downward and lateral use edges
++  of its feature dependency graph, whether a dependency is needed at load
++  time or only by references that the language removes before execution. The
++  cycle graph MUST be acyclic.
++- Upward use edges, assembly edges and republication edges are not part of the
++  cycle graph. The public contracts of an ancestor are the shared language of
++  its subtree, and a parent moves with its sub-features as one unit.
++- A load-time dependency cycle between source files of different features MUST
++  NOT exist. For this rule, references that the language removes before
++  execution, such as type-only imports, do not count. The profile MUST state
++  which references of its language count as load-time dependencies.
++- A cycle MUST be resolved as section "Aggregate and internal-feature
++  ownership" describes, or by moving the shared concept to the ancestor whose
++  subtree shares it.
++
++Excluding upward edges admits only cycles that close on an ancestor through an
++upward use, such as a parent that uses a sub-feature while the sub-feature uses
++the parent's contracts. Every such cycle stays inside the subtree of that
++ancestor, because code outside a subtree can reach only the subtree's root
++feature. The subtree moves as one unit, and the load-time rule keeps its source
++files acyclic.
++
++### Moving and splitting
++
++- A feature moves with its whole subtree as one directory. Moving a feature to
++  another parent, promoting a sub-feature, or nesting a feature under a new
++  parent stays inside one production module. It is not extraction and needs no
++  extraction decision.
++- A move MUST update the profile in the same change and MUST leave every rule
++  satisfied at the new position. When a move makes a feature invisible to code
++  that depends on it, the same change MUST add a republication or move that
++  code.
++- Code that depends on a moved feature only through public entrypoints or
++  republication SHOULD need no change other than its import locations.
++- When a feature grows, a part that uses the parent's contracts or shares its
++  lifecycle, and that no feature outside the parent uses directly, SHOULD
++  become a sub-feature. A part that other features use directly, or that
++  changes for its own reasons, SHOULD become a sibling feature.
++
++### Examples
++
++This subsection is informative. Conformance implementations SHOULD include
++these cases in their fixtures.
++
++```text
++features/
++  orders/
++    features/
++      pricing/
++      discounts/
++        features/
++          coupons/
++  billing/
++    features/
++      coupons/
++```
++
++The profile of this module declares every sub-feature shown. Unless a row
++says otherwise, every use and republication edge it shows is declared, and the
++files involved form no load-time import cycle.
++
++| Code in | Depends on | Result | Reason |
++| --- | --- | --- | --- |
++| `orders/discounts` | `orders` public entrypoint | allowed | upward use |
++| `orders` | `orders/discounts` public entrypoint | allowed | downward use |
++| `orders` and `orders/discounts` | each other, by the two edges above | allowed | the upward edge is outside the cycle graph |
++| `orders` | `orders/discounts/coupons` public entrypoint | rejected | `coupons` is visible only inside `orders/discounts` |
++| `orders/pricing` | `orders/discounts` public entrypoint | allowed | lateral use between siblings |
++| `orders/pricing` and `orders/discounts` | each other's public entrypoints | rejected | lateral cycle |
++| `orders/pricing` | `orders/discounts` domain | rejected | deep import |
++| `orders/discounts/coupons` | `billing` public entrypoint | allowed | lateral use of a top-level feature |
++| `billing` | `orders/pricing` public entrypoint | rejected | not visible outside `orders` |
++| `billing` | `orders` public entrypoint that republishes `pricing` | allowed | declared republication |
++| `orders` public entrypoint | `orders/discounts/coupons` public entrypoint, re-exported | rejected | republication skips a level |
++| `orders/discounts` public contracts | `orders` public entrypoint that republishes those same contracts, both at load time | rejected | load-time import cycle between features |
++| `orders/discounts` public contracts | `orders` public entrypoint that republishes them, type-only | allowed | upward and republication edges are outside the cycle graph, and type-only references do not count for the load-time rule |
++| module composition | `orders/discounts` composition surface | rejected | only `orders` assembles `orders/discounts` |
++| `orders` feature composition | `orders/discounts/coupons` composition surface | rejected | only `orders/discounts` assembles `coupons` |
++| `orders/discounts/coupons` | `orders/pricing` public entrypoint | allowed | lateral use of a sibling of an ancestor |
++| `orders/pricing` | `orders/discounts/coupons` public entrypoint | rejected | `coupons` is visible only inside `orders/discounts` |
++| `orders/pricing`, `orders/discounts`, `orders` | the public entrypoints of `orders/discounts`, `orders` and `orders/pricing`, in that order | allowed | the only cycle closes through the upward edge from `orders/discounts` to `orders` |
++| `orders/discounts`, `billing`, `orders` | the public entrypoints of `billing`, `orders` and `orders/discounts`, in that order | rejected | a cycle of lateral and downward use edges |
++| `orders/pricing` and `orders/discounts` | each other's public entrypoints, through type-only references only | rejected | type-only references count in the cycle graph |
++| `billing/coupons` and `orders/discounts/coupons` | - | allowed | names are unique only among the sub-features of one parent |
++| `orders` public entrypoint | `orders/pricing` public entrypoint, re-exported without a declaration | rejected | undeclared republication |
++| a test in the test root of `orders`, outside `features/discounts/` | `orders/discounts` domain | rejected | the test belongs to `orders` and may not use the internals of `orders/discounts` |
++| a source file directly in `orders/features/` | - | rejected | the container holds only sub-feature directories |
++| an empty `features/` directory in `orders/pricing` | - | rejected | the container exists only when it holds a sub-feature |
++| a direct entry `orders/helpers/` that the profile does not map | - | rejected | not the container, a mapped role directory or a mapped file |
++| `billing` feature composition | `orders` composition contract | allowed | lateral use from composition |
++| `billing` application code | `orders` composition contract | rejected | only composition code may depend on a composition contract |
++| `orders/discounts` feature composition | `orders` composition contract | allowed | upward use from composition |
++| module composition | `orders/discounts` composition contract | rejected | not visible outside `orders`; only what `orders` republishes |
++| `orders` composition contract | `orders/discounts` composition contract, re-exported and declared | allowed | declared republication from a direct sub-feature |
++
++## Composition contracts
++
++A profile MAY declare a composition contract for a feature. Every requirement
++in this section applies only where it does.
++
++- A composition contract is composition code of its feature. It exposes
++  only identifiers, descriptors and type declarations that composition uses
++  to connect the providers and consumers of the feature's capabilities. It
++  MUST NOT expose behavior, factories, adapters, aggregates or internal
++  types.
++- Only composition code MAY depend on a composition contract: the feature
++  composition, including the composition contract, of a feature to which the
++  owning feature is visible, and module or application composition for a
++  top-level feature, including what that feature republishes. Code of the
++  contracts, domain, application and adapters roles MUST NOT depend on any
++  composition contract, including its own feature's.
++- A composition contract MAY depend on the public entrypoint of its own
++  feature and on the public entrypoints and composition contracts of features
++  visible to its feature.
++- A dependency of composition code on the composition contract of another
++  feature is a use edge. It is declared and counted like every use edge.
++
++## Test ownership
++
++Tests MUST preserve feature ownership.
++
++- Focused white-box unit tests SHOULD be colocated with the source they exercise.
++- Feature contract, integration, adapter, persistence, and conformance tests
++  SHOULD live under the module test root for that feature.
++- Module export, declaration, packaged-artifact, and black-box consumer tests
++  SHOULD live under a module-level test area.
++- A generic detached unit-test tree that loses feature ownership SHOULD NOT be
++  used.
++- In a module that contains sub-features, the test root of a sub-feature is
++  `<parent feature test root>/features/<sub-feature>/`, and tests of a
++  sub-feature SHOULD live there. A test belongs to the deepest feature whose
++  source root or test root contains it. It MAY use the internals of its
++  owning feature and, of other features visible to its owning feature, the
++  public entrypoints, the internal APIs where this standard allows them and
++  the testing surfaces. It MUST NOT use any other part of another feature.
++
++Production builds and published artifacts MUST exclude test-only code. Test
++configuration SHOULD be created with the first real test, not as empty
++scaffolding.
++
++## Growth guardrails
++
++Feature ownership MUST be enforced mechanically rather than remembered only
++during review. An adopting repository MUST provide deterministic checks that:
++
++1. classify each production module by architectural role;
++2. reject production behavior outside an allowed feature or module-assembly
++   root;
++3. enforce role-specific dependency direction and public feature entry points;
++4. reject cross-feature deep imports and dependency cycles;
++5. reject empty ceremonial layers;
++6. require an explicit architecture decision for module-level ownership
++   exceptions;
++7. validate materialized modules against the repository-owned topology
++   authority;
++8. make the compliant creation path easier than a noncompliant path.
++
++When a production module in scope contains a sub-feature, the deterministic
++checks MUST also:
++
++9. derive the parent of every feature from its root, and reject a sub-feature
++   root that is not `<parent root>/features/<name>`, an entry of a
++   sub-feature container that is not a declared sub-feature, and an unmapped
++   direct entry of a feature root;
++10. assign every production and test file to the deepest feature that contains
++    it;
++11. reject a dependency on a feature that is not visible to the dependent code;
++12. reject an assembly edge to a sub-feature that does not run from the
++    feature composition of its parent, and module or application composition
++    that wires a sub-feature;
++13. reject an undeclared republication, and a republication that does not
++    re-export the public entrypoint or the composition contract of a direct
++    sub-feature from the same surface of its parent;
++14. reject a cycle in the cycle graph defined in section Sub-features, and a
++    load-time import cycle between files of different features; in such a
++    module, these are the dependency cycles that item 4 rejects.
++
++A gate SHOULD report, without failing, a feature deeper than the depth its
++profile declares for warnings.
++
++When the profile declares a composition contract, the deterministic checks
++MUST also reject a dependency on a composition contract from code that is not
++composition, and a dependency on the composition contract of a feature that
++is not visible to the dependent code.
++
++The repository MUST own its module identities, allowed paths, dependency edges,
++and exceptions. Shared tooling MAY implement validation and scaffolding, but it
++MUST NOT silently invent or widen repository policy.
++
++Generators SHOULD use a reviewable Plan followed by deterministic Apply.
++Interrupted generation SHOULD provide bounded recovery that does not depend on
++unrelated repository validity.
++
++## Layer responsibilities
++
++### Contracts
++
++Contracts own stable outer-boundary data, including:
++
++- client commands, queries, results, and errors;
++- bounded-context Published Language;
++- integration events;
++- transport schemas and compatibility metadata.
++
++Contracts MUST NOT expose aggregate instances or infrastructure types. Domain and
++application code MUST NOT import public transport contracts. Physical ownership
++by a feature does not make contracts an inner layer.
++
++Client APIs, Published Language, and integration events are distinct surfaces
++even when one feature owns them. They may have different compatibility,
++authorization, privacy, and disclosure rules and MUST NOT be reused merely to
++avoid mapping code.
++
++Each external contract surface MUST begin with one explicit first major version.
++Speculative successor versions are prohibited. A later major requires a
++repository-owned compatibility and migration decision.
++
++An integration-event schema SHOULD have an accompanying manifest covering
++ownership, authorization, privacy, ordering, delivery, retention, replay,
++payload limits, and compatibility. Transport configuration MUST NOT be the only
++authority for those semantics.
++
++### Domain
++
++Domain owns business meaning and invariants:
++
++- aggregates;
++- entities;
++- value objects;
++- domain events;
++- domain services;
++- invariant violations.
++
++Domain behavior MUST be deterministic for the same explicit inputs. Time, IDs,
++randomness, authorization facts, and external observations enter through
++application orchestration.
++
++### Application
++
++Application owns use-case coordination:
++
++- command and query handlers;
++- transport-independent input and output models;
++- transaction boundaries;
++- coordination policies;
++- inbound and outbound ports;
++- authorization of business operations;
++- mapping domain events to publication intent;
++- staging durable external intent with state transitions.
++
++Application code MUST NOT know which adapter implements a port and MUST NOT accept
++an SDK or transport DTO directly.
++
++Ordinary coordination SHOULD remain in named use cases. A durable, stateful
++business process manager belongs to the feature whose business process it
++coordinates. Shared platform code MAY provide scheduling, persistence, dispatch,
++and test primitives, but MUST NOT absorb product workflow policy into a generic
++workflow engine.
++
++### Adapters
++
++Inbound adapters validate external contracts and map them into application input
++models. Outbound adapters implement application ports for persistence, runtime,
++messaging, workflow, clocks, IDs, and external systems.
++
++Direction is named relative to the application core:
++
++- inbound initiates an application capability through an inbound port;
++- outbound is invoked by application code through an outbound port.
++
++A technology may appear on both sides. Bidirectional integration MUST expose
++distinct inbound and outbound roles instead of hiding both behind a broad
++gateway.
++
++Feature-specific mappings, repositories, handlers, schemas, recovery policy,
++tables, indexes, and migrations MUST remain with the owning feature. Module or
++process composition MAY share low-level connections and lifecycle resources,
++but MUST NOT become the owner of feature behavior.
++
++An external-system adapter belongs to the feature that owns the use case, port,
++mapping policy, and recovery decision. It SHOULD be promoted to a dedicated
++integration module only after proven cross-feature reuse, independent lifecycle
++or publication, or a dedicated provider conformance surface.
++
++Adapters MAY contain technology-specific recovery and mapping behavior but MUST
++NOT contain business invariants owned by the domain.
++
++### Composition
++
++Composition is an assembly responsibility, not a mandatory domain layer. It may
++occur at three levels:
++
++1. Optional feature composition wires feature-local handlers from exact typed
++   dependencies, may use the composition contracts of features visible to its
++   feature where the profile declares them, and, in a parent, wires the
++   composition surfaces of its direct sub-features.
++2. Module composition wires the factories of top-level features, adapters,
++   exports, and migration contributions.
++3. Application composition creates process-wide resources and owns process
++   lifecycle.
++
++Feature composition MUST NOT create process-wide resources. A feature SHOULD
++expose a narrow typed factory or equivalent constructor surface and MUST NOT
++export a dependency-injection container.
++
++Only the application composition root may:
++
++- choose concrete cross-module bridges and adapters;
++- order start, readiness, stop, and disposal lifecycles;
++- roll back partially started composition;
++- share technical connection pools without sharing feature repositories or
++  transaction ownership.
++
++Migration assembly may order and validate feature-owned contributions, but it
++MUST NOT redefine feature schema or migration content. Features MUST NOT acquire
++module-global migration locks or run migrations independently.
++
++### Projections
++
++Each owning module controls projections derived from its state and events. A
++feature may own projection handlers and read models for its capability.
++Cross-module client views SHOULD be assembled at an edge query-composition
++adapter, not in a global projection domain.
++
++Projection policy and projectors belong in application code, inbound event
++handlers belong in inbound adapters, and read-model persistence belongs in
++outbound adapters. `projections` is not a universal feature layer.
++
++## Aggregate and internal-feature ownership
++
++Every aggregate implementation has one owning feature. Another feature inside
++the same bounded context or module:
++
++- MAY depend only on an explicit narrow domain or application internal API;
++- MAY use stable identities and shared Ubiquitous Language types exposed for the
++  module;
++- MUST ask the owning application capability to mutate the aggregate;
++- MUST NOT import the aggregate repository or mutate aggregate internals.
++
++Cross-aggregate workflows belong in application coordination or explicit process
++managers. Published Language and anti-corruption layers are required across
++bounded contexts, not as ceremony between every feature inside one context.
++
++The module MUST maintain an explicit directed dependency graph between internal
++features. Cycles MUST be resolved by moving a concept to its semantic owner,
++introducing an application coordinator, or revisiting the feature boundary.
++
++In a module that contains sub-features, section Sub-features defines the edges
++of that graph, the visibility of every feature, and which edges form cycles.
++In a module that contains sub-features, a sibling feature in this section is
++any other feature visible to the dependent feature.
++
++Domain code may consume only another feature's domain internal API. Application
++code may consume domain or application internal APIs. Adapters MUST reach sibling
++features through their own application core and composition. Internal API files
++MUST be curated surfaces, not barrels over a whole layer, and MUST NOT expose a
++repository, aggregate implementation, adapter, container, or framework type.
++
++## Dependency mechanisms
++
++Use exactly one dependency mechanism for each relationship:
++
++1. An ordinary fixed dependency uses a static import and a typed factory or
++   constructor.
++2. A replaceable internal implementation uses a consumer-owned port selected by
++   module or application composition.
++3. A dynamically selected plugin or extension uses an explicit validated graph,
++   immutable activation plan, exact provider bindings, and declared cardinality.
++
++The third mechanism MUST be introduced only when a real capability requires
++runtime provider selection, variable dependencies, or an independently managed
++lifecycle.
++
++Ambient containers, service locators, parent-container fallback, registration
++order as semantics, and global mutable registries are prohibited.
++
++## Public module surfaces
++
++Each production module MUST expose deliberately separate public surfaces for the
++capabilities it actually supports. Common surfaces include:
++
++```text
++module       module factory and lifecycle
++api          provider-owned inbound application API
++published    Published Language and public read contracts
++contracts    external schemas
++testing      fixtures and conformance kits
++```
++
++Consumer-owned outbound ports remain private unless a separately packaged
++adapter must implement them. In that case, the module MAY expose one narrow
++service-provider surface for the exact capability. Broad service-provider
++barrels are prohibited.
++
++Module exports MUST prevent consumers from importing feature internals.
++
++## Shared code policy
++
++A repository-wide shared kernel MUST NOT be created by default. It requires an
++architecture decision that names owners, versioning policy, and exact consumers.
++It MUST NOT contain generic aggregate bases, generic repositories, global
++business errors, domain identities, product policies, provider branches, or
++convenience services.
++
++Stable technical contract primitives MAY live in a narrowly named contract
++module when duplication would break interoperability. Context-local business
++identities and concepts remain context-owned even when serialized values look
++alike.
++
++Before extracting shared code, answer:
++
++1. Does it represent the same concept with the same lifecycle for every current
++   consumer?
++2. Would duplication be cheaper than semantic coupling?
++3. Can the behavior be expressed through a contract instead?
++
++## Promoting a feature to a module
++
++The default is a feature-owned slice inside its existing module. A feature is
++extracted only when it is ready and at least one of these conditions is proven:
++
++| Evidence | Extraction condition |
++| --- | --- |
++| Hard boundary | Independent deployment, scaling, ownership, release, security, persistence, or external API lifecycle |
++| Reuse | At least two real independent consumers require the same semantics |
++| Public provider surface | At least two independent implementations pass the same conformance suite |
++| Dependency lifecycle | Native, platform, post-install, incompatible, or independently updated dependencies require isolation |
++
++Conceptually:
++
++```text
++EXTRACT = READY AND (BOUNDARY OR REUSE OR PUBLIC_PROVIDER_SURFACE OR DEPENDENCY_LIFECYCLE)
++```
++
++`READY` requires accepted semantic ownership, a curated public surface,
++compatibility policy, executable tests, and a migration plan.
++
++A feature MUST NOT be extracted merely for folder isolation, cache performance,
++large file count, one adapter, or a hypothetical future consumer. Extraction
++requires a repository-owned architecture decision. Moving a ready feature SHOULD
++preserve its internal feature ownership; callers change only to the extracted
++module's explicit public surface.
++
++These conditions apply to a sub-feature as to any feature; an extracted
++sub-feature takes its subtree with it. Moving a feature inside its module is
++not extraction; section Sub-features governs it.
++
++## Conformance evidence
++
++An adopting repository SHOULD provide positive and negative fixtures for its
++structural rules. At minimum, its deterministic gate MUST prove:
++
++- one valid feature for every adopted module role;
++- rejection of production behavior outside a feature;
++- rejection of a cross-feature deep import;
++- rejection of an undeclared dependency edge or cycle;
++- rejection of an empty ceremonial layer;
++- rejection of an undeclared module or ownership exception.
++
++A repository whose profile declares a sub-feature MUST additionally prove:
++
++- one valid sub-feature with an upward use edge, a downward use edge from its
++  parent, and an assembly edge from its parent;
++- acceptance of a parent and a sub-feature that depend on each other only
++  through that upward edge and that downward edge;
++- rejection of a dependency on a sub-feature from outside its parent's subtree;
++- rejection of a sub-feature wired outside the feature composition of its
++  parent;
++- rejection of an undeclared republication and of a republication that skips a
++  level;
++- rejection of a downward or lateral cycle, including one formed only by
++  type-only references;
++- rejection of a load-time import cycle between files of different features.
++
++A repository whose profile declares a composition contract MUST additionally
++prove:
++
++- acceptance of feature composition that depends on the composition contract
++  of a visible feature over a declared edge;
++- rejection of code of the contracts, domain, application or adapters roles
++  that depends on a composition contract;
++- rejection of a dependency on the composition contract of a feature that is
++  not visible.
++
++Conformance to this standard does not establish domain correctness, security,
++operational readiness, or deployment qualification. Those claims remain owned by
++the adopting repository.
+diff --git a/docs/decisions/0010-feature-module-standard-v1-1-sub-features.md b/docs/decisions/0010-feature-module-standard-v1-1-sub-features.md
+new file mode 100644
+index 0000000..65d6a58
+--- /dev/null
++++ b/docs/decisions/0010-feature-module-standard-v1-1-sub-features.md
+@@ -0,0 +1,79 @@
++# ADR-0010: Feature Module Standard v1.1 adds sub-features
++
++Status: Accepted
++
++Date: 2026-10-15
++
++Decision owner: Organization maintainers
++
++## Context
++
++Feature Module Standard v1 places every feature directly in a module's
++features root and defines no nested form. When a feature grows too large to
++stay one unit, v1 offers only a sibling feature, which spreads tightly
++related parts across the module and exposes each of them to every other
++feature. On 2026-10-11 the owner decided that features may nest to any depth:
++a package is a unit of reuse and distribution, a feature is a unit of meaning
++and ownership, and a feature with its sub-features moves as one folder.
++Composition also lacks a surface for the identifiers and descriptors that
++connect a provider feature with its consumers, so such a dependency is a deep
++import under v1. Version v1 is byte-immutable under ADR-0004.
++
++## Decision
++
++1. Publish Feature Module Standard v1.1. It adds sections Sub-features and
++   Composition contracts and the matching adoption, layout, test,
++   composition, guardrail and evidence rules: sub-features at
++   `<parent root>/features/<name>/`, private to their parent, reachable
++   outside it only through declared republication, assembled only by their
++   parent, and connected only through public entrypoints, the internal API
++   where the standard allows it, and, from composition, composition
++   contracts, with an acyclic graph of downward and lateral use edges.
++2. Version policy, decided by the owner as the documented approval
++   authority: a minor successor `vN.M` of its predecessor, `vN.(M-1)` or
++   `vN`, may add constructs that a profile must declare before using them,
++   with requirements, including adaptations of predecessor requirements,
++   that apply only to a module that declares them. It may also correct a
++   published requirement, for example by clarifying or relaxing it, when the
++   correction makes no repository that conforms to the predecessor
++   non-conforming. Every other requirement of the predecessor stays
++   unchanged, so a repository that conforms to the predecessor and declares
++   none of the added constructs conforms to `vN.M` once its profile pins
++   `vN.M`. Every other change publishes `vN+1`. Version v1.1 is the first
++   minor successor.
++3. Version v1 stays published. No repository moves to v1.1 implicitly. Each
++   adopts it through its own profile, decision and deterministic gate.
++4. The informative examples of section Sub-features are the shared cases that
++   conformance implementations should include in their fixtures. An
++   implementation may be repository-owned or shared tooling; either validates
++   the policy a profile declares and never widens it.
++
++## Rejected alternatives
++
++- Keep v1 and split only into sibling features: tightly related parts spread
++  across the module and stay visible to every other feature.
++- Nest a sub-feature directly in its parent root (`<parent>/<child>/`): child
++  names collide with role names, so a checker can no longer read the first
++  segment below a feature root as a role.
++- A second container name such as `sub-features/`: moving a feature between
++  the top level and a parent would rename its container.
++- Count upward use edges in the cycle graph, or forbid a parent to use its
++  sub-features: either rejects a parent and a sub-feature that share the
++  parent's contracts, the main reason to nest.
++- Publish v2: no v1 requirement changes for a module that declares no
++  sub-feature and no composition contract, so a major version would announce
++  a break that does not exist.
++
++## Consequences
++
++- A repository may nest features and declare composition contracts after its
++  profile adopts v1.1. Until then a v1 profile and its checker keep their
++  current behavior.
++- Agent Runtime needs a scoped checker and profile change, under its own
++  decision, before its features nest.
++- A repository without a profile may follow the v1.1 rules without claiming
++  conformance.
++- A later change that could make a repository that conforms to v1.1
++  non-conforming, other than through a construct its profile must newly
++  declare, publishes v2. Any other change, such as an added construct or a
++  correction that clarifies or relaxes a requirement, may publish v1.2.
+diff --git a/docs/decisions/README.md b/docs/decisions/README.md
+index 270596a..2106f45 100644
+--- a/docs/decisions/README.md
++++ b/docs/decisions/README.md
+@@ -5,3 +5,4 @@
+ - [ADR-0003: Reconciled Package Publication](0003-reconciled-package-publication.md)
+ - [ADR-0004: Versioned Feature Module Standard](0004-versioned-feature-module-standard.md)
+ - [ADR-0005: Explicit five-coordinate Qualified Docs Cohort v2](0005-qualified-docs-cohort-v2.md)
++- [ADR-0010: Feature Module Standard v1.1 adds sub-features](0010-feature-module-standard-v1-1-sub-features.md)
+diff --git a/docs/engineering-quality-standard.md b/docs/engineering-quality-standard.md
+index 705f14c..86b82be 100644
+--- a/docs/engineering-quality-standard.md
++++ b/docs/engineering-quality-standard.md
+@@ -247,7 +247,7 @@ opens a PR with `gh` before a failed-run rerun/current-input attestation.
+ 
+ | Topic | Canonical entrypoint |
+ | --- | --- |
+-| Feature ownership, layers and dependency mechanisms | [Feature Module Standard index](architecture/feature-module-standard/README.md) and [v1](architecture/feature-module-standard/v1.md); the consumer's local adoption profile owns its exact scope |
++| Feature ownership, layers and dependency mechanisms | [Feature Module Standard index](architecture/feature-module-standard/README.md), [v1](architecture/feature-module-standard/v1.md) and [v1.1](architecture/feature-module-standard/v1.1.md); the consumer's local adoption profile owns its exact scope |
+ | Get Modular construction and consumer adoption, when applicable | [Consumer Module Standard](https://github.com/agent-teams-ai/get-modular/blob/main/docs/architecture/common-assembly.md#consumer-module-standard); use the consumer's reviewed pin |
+ | Reusable development tooling and checks | [Engineering Foundation](https://github.com/agent-teams-ai/engineering-foundation); repository profiles own applicability and actual commands |
+ | Commit and PR authorship | [Maintained owner policy](../GOVERNANCE.md#commit-and-pull-request-authorship) and [canonical identity/status rule](../governance/commit-author-identity.json); preserve external human authorship |
+diff --git a/governance/feature-module-standard.json b/governance/feature-module-standard.json
+index a24e3a4..6d69f6c 100644
+--- a/governance/feature-module-standard.json
++++ b/governance/feature-module-standard.json
+@@ -10,6 +10,15 @@
+       "git_blob_sha": "d0bfff2033faf544fe65268c1dcdfd524d093015",
+       "sha256": "851653f96643cf0466b67ab22963661976b00de44840fa3144a48a8c054f95fa",
+       "profile_contract": "adoption-contract"
++    },
++    {
++      "version": "v1.1",
++      "status": "published",
++      "published_at": "2026-10-16",
++      "path": "docs/architecture/feature-module-standard/v1.1.md",
++      "git_blob_sha": "bd949a9a670862fea851a7791fce772fdef3b4fc",
++      "sha256": "cfa088ef7396139554fe5e3bcc839271b23299c6b60c569a3a7f1cd7c9f0bc6c",
++      "profile_contract": "adoption-contract"
+     }
+   ]
+ }

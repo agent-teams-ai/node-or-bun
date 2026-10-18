@@ -1,0 +1,1 @@
+f5653f5 docs(architecture): publish Feature Module Standard v1.1 and ADR-0010

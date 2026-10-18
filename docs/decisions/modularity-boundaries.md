@@ -19,9 +19,12 @@ saved. Freshness is not asserted in advance.
 | EQS pin `66d6d3d` | resolves, ancestor of `f5653f5` | `66d6d3…` | unchanged |
 | agent-architecture-standard main | `4d19cece3b40c28eb8756b79f96ba1577af0b449` | `2fda5ffd7` | saved pin does not resolve (HTTP 422); no freshness claim |
 
-Evidence bytes and outputs: staging `registry/archives/review-inputs/
-pin-check-20261018/` (SHA256SUMS verified). The CMS document was read at the
-current pin (`ccd815ea`), path `docs/architecture/common-assembly.md`. The
+Evidence bytes and outputs: committed at
+[docs/decisions/evidence/pin-check-20261018](evidence/pin-check-20261018)
+(`SHA256SUMS` verified; identical copies are staged at
+`registry/archives/review-inputs/pin-check-20261018/` on the workstream
+registry). The CMS document was read at the current pin (`ccd815ea`), path
+`docs/architecture/common-assembly.md`. The
 Feature Module Standard v1 identity is unchanged (blob `d0bfff20…`, SHA-256
 `851653f9…`); its successor v1.1 (`cfa088ef…`) applies only to a consumer whose
 profile pins it, which this one does not.
@@ -29,9 +32,13 @@ profile pins it, which this one does not.
 ## Boundary classification
 
 Each real boundary is classified against the Consumer Module Standard (CMS) at
-the current pin. Leaf helpers (`node-runtime-verifier`, the internal capture
-machinery in `src/executor.ts`) are not graph nodes: they are fixed library
-internals and are excluded from classification.
+the current pin. Leaf helpers are not graph nodes: they are fixed library
+internals and are excluded from classification. In this package they are
+`src/internal/capture.ts`, `src/internal/classification.ts`,
+`src/internal/input.ts`, `src/internal/settlement.ts`,
+`src/internal/termination.ts` and the capture lifecycle in `src/executor.ts`;
+the `node-runtime-verifier` packed-harness helper named in plan v4 section 4
+(F1) is Foundation-side test tooling and is not a file of this package.
 
 ### 1. Neutral contract as the consumer port
 
@@ -88,9 +95,13 @@ internals and are excluded from classification.
 
 - Path: the N/E backend decision (recorded in
   [backend.md](backend.md)) — N accepted by the pre-recorded rule of plan v4
-  section 2.4; profile choice (Node/Bun default, Bun-default PR in phase 6) is
-  static.
-- Contract: plan v4 sections 2 and 5; decision record in this directory.
+  section 2.4. The package itself provides no Node/Bun default profile: a
+  consumer chooses and passes the adapter explicitly
+  (`createNodeProcessAdapter` or `createBunProcessAdapter`). The static choice
+  lives in the consumer's composition; the Bun-default PR of plan v4 phase 6
+  sets a Foundation-side default, not a package one.
+- Contract: plan v4 sections 2 and 5; decision record in this directory; the
+  adapter factories of the public surface.
 - Owner: plan owner (decision rule) / this repository (record).
 - Conclusion: static selection is not an argument against Assembly. The CMS at
   the current pin explicitly supports static module lists ("a root that
