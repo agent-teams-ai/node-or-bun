@@ -51,7 +51,7 @@ and section 3.3 lifecycle. The accepted v3 record above remains unchanged.
 
 ## Section 3.4 consumer-profile result
 
-Consumer-profile decision: NONE APPLICABLE - recorded as an unresolved gap per plan v4 3.4.6: the narrowest candidate (development-only path: TypeScript Node preset + assert-dev-only) is rejected because agent-teams-foundation assert-dev-only requires an exact pnpm 11 packageManager pin and assert-registry requires a parseable pnpm-lock.yaml, while this repository is explicitly npm-managed with package-lock.json authoritative. Per plan v4 3.4.6 the 0.2.0 RELEASE WAITS on this unresolved technical decision.
+Consumer-profile decision: NONE APPLICABLE - recorded as an unresolved gap per plan v4 3.4.6: the narrowest candidate (development-only path: TypeScript Node preset + assert-dev-only) is rejected because agent-teams-foundation assert-dev-only requires an exact pnpm 11 packageManager pin and assert-registry requires a parseable pnpm-lock.yaml, while this repository is explicitly npm-managed with package-lock.json authoritative. Per plan v4 3.4.6 this gap is release-blocking; the single authoritative status and decision point are "Section 3.4 gap status" below.
 
 The section 3.4 output is NOT integrated as a dependency. Plan v4 3.4.2 asks
 for an exact development dependency on Foundation, but this repository's
@@ -61,13 +61,15 @@ recorded explicitly: the Foundation pin is not applied and the consumer profile
 is not applied. There is no production import, no development dependency on
 Foundation, and no invented CI, architecture, or docs consumer profile.
 
-Section 3.4 gap status (updated 2026-10-18, plan v4 3.4.6): the gap stays
-OPEN and release-blocking. The operator did not resolve it: no consumer
-profile is applied, and the Foundation development pin is withheld under the
-AGENTS.md policy above. Two owner options remain: accept the recorded gap as
-a delta for 0.2.0 (optionally granting a policy exception to add the exact
-development pin), or migrate the repository toolchain to pnpm 11 with
-pnpm-lock.yaml so a Foundation profile becomes applicable. The 0.2.0 release
-completes only after the owner records this choice explicitly; the npm
-publish authentication stop is where the owner is present and can record it.
-Everything up to that stop may be prepared.
+Section 3.4 gap status (updated 2026-10-18, plan v4 3.4.6) - authoritative
+decision record for release operators: the gap is OPEN, release-blocking,
+and NOT accepted. No acceptance exists yet. The operator did not resolve it:
+no consumer profile is applied, and the Foundation development pin is
+withheld under the AGENTS.md policy above. Two owner options remain: accept
+the recorded gap as a delta for 0.2.0 (optionally granting a policy exception
+to add the exact development pin), or migrate the repository toolchain to
+pnpm 11 with pnpm-lock.yaml so a Foundation profile becomes applicable. The
+0.2.0 release must not publish before the owner records this choice
+explicitly; the npm publish authentication stop is where the owner is present
+and can record it. Preparation may proceed up to that stop; publishing may
+not.

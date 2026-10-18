@@ -73,14 +73,6 @@ const captureError = (value: unknown, streamName: "stdout" | "stderr"): ProcessR
   );
 };
 
-const cleanupFailureFrom = (
-  cause: unknown,
-  initiatingError: unknown,
-): unknown => {
-  void initiatingError;
-  return cause;
-};
-
 const initiatingCause = (cause: CompletionCause | "capture" | "observation"): ProcessInitiatingCause => {
   switch (cause) {
     case "timeout":
@@ -280,26 +272,17 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
           ? closeSettlement
           : undefined;
         if (settled.status === "timeout") {
-          throw cleanupFailureFrom(
-            closeFailure === undefined
-              ? new Error("native capture close or reader settlement remained open")
-              : closeFailure.reason,
-            initiatingFailure?.error,
-          );
+          throw closeFailure === undefined
+            ? new Error("native capture close or reader settlement remained open")
+            : closeFailure.reason;
         }
         if (closeFailure !== undefined) {
-          throw cleanupFailureFrom(
-            closeFailure.reason === undefined
-              ? withCause(new Error("native capture closure failed"), undefined)
-              : closeFailure.reason,
-            initiatingFailure?.error,
-          );
+          throw closeFailure.reason === undefined
+            ? withCause(new Error("native capture closure failed"), undefined)
+            : closeFailure.reason;
         }
         if (forcedAfterEofDeadline) {
-          throw cleanupFailureFrom(
-            new Error("capture EOF deadline elapsed"),
-            initiatingFailure?.error,
-          );
+          throw new Error("capture EOF deadline elapsed");
         }
       };
 
