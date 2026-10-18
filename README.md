@@ -94,10 +94,13 @@ npm run pack
 npm run qualify
 ```
 
-This TEST change-set has executed typecheck, Node/Bun conformance, Node-under-Bun,
-pack, and installed-consumer qualification on Linux only. No native Windows or
-macOS run is claimed here. The workflow matrix is configuration, not completed
-release evidence; those platform runs remain pending.
+This change-set executed typecheck, Node/Bun conformance, Node-under-Bun, pack,
+and installed-consumer qualification locally on Linux only. The library CI
+workflow executed the same steps on macOS, Ubuntu, and Windows runners plus a
+Node 24.18.0 conformance run; those runs completed green on merge commit
+`e6fbf257f4` (workflow runs `39112568940` and `39113096124`). Native Windows
+wrapper/Job behavior and the Foundation job matrix are Foundation-side pending
+items and are not claimed here.
 
 See [the process contract](https://github.com/agent-teams-ai/process-runtime/blob/main/docs/process-contract.md),
 [the 0.1-to-0.2 migration

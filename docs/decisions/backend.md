@@ -64,6 +64,11 @@ Execa; the comparison executed to completion.
 
 - Comparison run `prc-lib-20261014-ne-a2` (report, `dependency-facts.json`,
   `dependency-closure.json`, case matrix) staged in the immutable review
-  archives of the `bun-process-v1` workstream on the worker host.
-- CI artifacts for this repository: conformance on macOS, Ubuntu, and Windows,
-  node24-compat, and package-artifact, green on merge commit `e6fbf257f4`.
+  archives of the `bun-process-v1` workstream on the worker host. This Linux
+  comparison run makes no native Windows or macOS claim; case 9 stays pending.
+- Library CI on merge commit `e6fbf257f4`: typecheck, shared Node and Bun
+  conformance, Node-under-Bun, pack, and installed-consumer qualification
+  completed green on the macOS, Ubuntu, and Windows runners, with Node 24.18.0
+  conformance green on Ubuntu (workflow runs `39112568940` and `39113096124`).
+  These are CI artifacts for this repository only; the Foundation job matrix
+  and native Windows wrapper/Job execution remain pending and unclaimed.

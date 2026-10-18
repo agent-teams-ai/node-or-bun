@@ -49,7 +49,7 @@ accepted: Execa is absent, the change-set removes the production
 existing native Node and Bun adapters carry the shared section 3.2 classifier
 and section 3.3 lifecycle. The accepted v3 record above remains unchanged.
 The full decision record with input facts and rule application is
-`docs/decisions/backend.md`.
+[the backend decision record](decisions/backend.md).
 
 ## Section 3.4 consumer-profile result
 
