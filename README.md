@@ -110,10 +110,10 @@ Node 24.18.0 conformance run; those runs completed green on merge commit
 wrapper/Job behavior and the Foundation job matrix are Foundation-side pending
 items and are not claimed here.
 
-See [the process contract](https://github.com/agent-teams-ai/process-runtime/blob/main/docs/process-contract.md),
+See [the process contract](https://github.com/agent-teams-ai/node-or-bun/blob/main/docs/process-contract.md),
 [the 0.1-to-0.2 migration
-guide](https://github.com/agent-teams-ai/process-runtime/blob/main/docs/migration-0.1-to-0.2.md),
+guide](https://github.com/agent-teams-ai/node-or-bun/blob/main/docs/migration-0.1-to-0.2.md),
 and [the bounded scope
-record](https://github.com/agent-teams-ai/process-runtime/blob/main/docs/plan-scope.md).
+record](https://github.com/agent-teams-ai/node-or-bun/blob/main/docs/plan-scope.md).
 The `docs/` directory is not part of the published package, so these links
 point at the repository copy.

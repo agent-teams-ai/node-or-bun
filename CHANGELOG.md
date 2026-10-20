@@ -7,14 +7,14 @@
   without losing captured content. The nullable pair is copied, frozen and
   non-enumerable; error messages and ordinary error JSON do not include it.
 - Keep first-cause settlement and capture/decode failure facts unchanged.
-- See the [0.2.1 migration note](https://github.com/agent-teams-ai/process-runtime/blob/main/docs/migration-0.2.0-to-0.2.1.md).
+- See the [0.2.1 migration note](https://github.com/agent-teams-ai/node-or-bun/blob/main/docs/migration-0.2.0-to-0.2.1.md).
 
 ## 0.2.0 - 2026-10-18
 
 - Breaking: after a timeout or cancellation, late exit codes and decode
   failures no longer settle the result; they are reported in
   `ProcessRuntimeError.facts`. See the [migration
-  guide](https://github.com/agent-teams-ai/process-runtime/blob/main/docs/migration-0.1-to-0.2.md).
+  guide](https://github.com/agent-teams-ai/node-or-bun/blob/main/docs/migration-0.1-to-0.2.md).
 - Rename the package to `node-or-bun` while preserving `.`, `/node`, `/bun`,
   and `/testing`.
 - Apply the fixed facts-outside lifecycle and cancellation semantics to the

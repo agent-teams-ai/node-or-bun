@@ -13,7 +13,8 @@ four public subpaths are preserved and no new subpath was added.
 ```
 
 Apply the same package-name change to `/bun` and `/testing` imports. The
-repository URL remains `agent-teams-ai/process-runtime`.
+repository was subsequently renamed to `agent-teams-ai/node-or-bun`; the
+old GitHub URL redirects to the new repository.
 
 ## Cancellation and result semantics
 
