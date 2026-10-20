@@ -2,6 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist-tests",
+    "rewriteRelativeImportExtensions": true,
     "rootDir": ".",
     "types": ["node", "bun"],
     "lib": ["ES2023", "DOM"],

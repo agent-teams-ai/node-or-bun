@@ -48,6 +48,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck source, harnesses, scripts, and tests
         run: npm run typecheck
+      - name: Reject unsafe release inputs and incomplete CI evidence
+        run: node --test tests/release-policy.test.ts
       - name: Run shared Node and Bun conformance
         run: npm test
       - name: Run Node adapter suites inside Bun
