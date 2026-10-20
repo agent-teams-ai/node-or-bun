@@ -1,0 +1,45 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.2 typecheck
+> tsc -p tsconfig.root.json && tsc -p tsconfig.node.json && tsc -p tsconfig.bun.json && tsc -p tsconfig.tests.json
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.2 test:release
+> node --test tests/release-policy.test.ts tests/release-candidate.test.ts
+
+✔ installed common conformance: direct-dependent-empty-and-unchanged-none (5.672239ms)
+✔ installed common conformance: no-release-with-empty-intent-and-none (0.699426ms)
+✔ installed common conformance: existing-retained-file-consumption (1.550805ms)
+✔ installed common conformance: nested-packages-without-root-manifest (2.120155ms)
+✔ installed common conformance: unclassified-root-manifest (0.602105ms)
+✔ installed common conformance: unknown-input (0.227234ms)
+✔ installed common conformance: stale-config-binding (0.892169ms)
+✔ installed common conformance: hidden-export-change-despite-permission (0.859277ms)
+✔ installed common conformance: exact-planned-version-mismatch (0.876425ms)
+✔ installed common conformance: missing-original-consumption-digest (2.377912ms)
+✔ installed common conformance: unlisted-generated-output (0.562162ms)
+✔ installed common conformance: duplicate-direct-link (0.654067ms)
+✔ actual Changesets v3 generates the public root patch, consumes empty intent, then npm synchronizes only root lock versions (4004.434871ms)
+✔ an actual empty-only official plan performs no versioning and retains its intent (3331.444088ms)
+✔ the actual pinned reader excludes source documentation from intents while whole-tree checks protect its bytes (9413.056198ms)
+✔ independent whole-tree observation rejects manifest, lock, intent, history, mode and unlisted-output tampering (12493.576791ms)
+✔ working and committed Git trees retain and reject tampering of an actual __proto__ file (5388.436164ms)
+✔ versioning rejects source, config, engine, HEAD and Git-directory changes after planning (4672.064563ms)
+✔ foreign physical roots are rejected and PATH/npm environment cannot replace the captured CLI (3460.780332ms)
+✔ release PR replay derives the exact version and changelog from its independent current base (15821.641329ms)
+✔ the genuinely generated 0.2.3 archive is the default installed Node, Bun and Node-in-Bun qualification input (9018.496969ms)
+✔ release rejects unrelated, stale, PR, incomplete or partially green CI (1.942782ms)
+✔ release rejects stale attempt artifacts, expired artifacts and wrong-source archives (0.356596ms)
+✔ a queued docs commit still releases its unpublished source version without rolling latest back (0.57381ms)
+✔ registry errors and malformed metadata cannot be interpreted as package absence (0.32913ms)
+✔ release manifest binds archive bytes and rejects wrong package or unsafe paths (3.222378ms)
+✔ qualification rejects incomplete, cross-run, cross-source and mismatched original/registry evidence (0.930315ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 67784.390921

@@ -1,0 +1,141 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.2 check
+> npm run verify-toolchain && npm run typecheck && npm run test:release && npm run test && npm run test:node-under-bun && npm run pack && npm run qualify
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.2 verify-toolchain
+> node scripts/verify-toolchain.ts
+
+toolchain verified: Node 26.11.1, TypeScript 7.0.2, Bun 1.4.3
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.2 typecheck
+> tsc -p tsconfig.root.json && tsc -p tsconfig.node.json && tsc -p tsconfig.bun.json && tsc -p tsconfig.tests.json
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.2 test:release
+> node --test tests/release-policy.test.ts tests/release-candidate.test.ts
+
+✔ installed common conformance: direct-dependent-empty-and-unchanged-none (5.186583ms)
+✔ installed common conformance: no-release-with-empty-intent-and-none (0.442736ms)
+✔ installed common conformance: existing-retained-file-consumption (1.220838ms)
+✔ installed common conformance: nested-packages-without-root-manifest (2.939973ms)
+✔ installed common conformance: unclassified-root-manifest (0.656007ms)
+✔ installed common conformance: unknown-input (0.297989ms)
+✔ installed common conformance: stale-config-binding (0.739758ms)
+✔ installed common conformance: hidden-export-change-despite-permission (0.804385ms)
+✔ installed common conformance: exact-planned-version-mismatch (0.622087ms)
+✔ installed common conformance: missing-original-consumption-digest (0.971528ms)
+✔ installed common conformance: unlisted-generated-output (0.710672ms)
+✔ installed common conformance: duplicate-direct-link (0.261322ms)
+✖ actual Changesets v3 generates the public root patch, consumes empty intent, then npm synchronizes only root lock versions (4379.620946ms)
+✔ an actual empty-only official plan performs no versioning and retains its intent (3705.523237ms)
+✖ independent whole-tree observation rejects manifest, lock, intent, history, mode and unlisted-output tampering (5703.591915ms)
+✖ working and committed Git trees retain and reject tampering of an actual __proto__ file (4928.616629ms)
+✔ versioning rejects source, config, engine, HEAD and Git-directory changes after planning (4332.942559ms)
+✖ foreign physical roots are rejected and PATH/npm environment cannot replace the captured CLI (5191.932967ms)
+✖ release PR replay derives the exact version and changelog from its independent current base (4718.646516ms)
+✖ the genuinely generated 0.2.3 archive is the default installed Node, Bun and Node-in-Bun qualification input (5647.42092ms)
+✔ release rejects unrelated, stale, PR, incomplete or partially green CI (2.010728ms)
+✔ release rejects stale attempt artifacts, expired artifacts and wrong-source archives (0.534643ms)
+✔ a queued docs commit still releases its unpublished source version without rolling latest back (0.779197ms)
+✔ registry errors and malformed metadata cannot be interpreted as package absence (0.396528ms)
+✔ release manifest binds archive bytes and rejects wrong package or unsafe paths (2.621932ms)
+✔ qualification rejects incomplete, cross-run, cross-source and mismatched original/registry evidence (1.315794ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 20
+ℹ fail 6
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 39728.837793
+
+✖ failing tests:
+
+test at tests/release-candidate.test.ts:60:1
+✖ actual Changesets v3 generates the public root patch, consumes empty intent, then npm synchronizes only root lock versions (4379.620946ms)
+  Error: Release lock may change only its two matching root version fields
+      at assertLock (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:295:52)
+      at checkReleaseTree (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:353:5)
+      at versionRelease (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:373:18)
+      at TestContext.<anonymous> (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/tests/release-candidate.test.ts:73:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at tests/release-candidate.test.ts:96:1
+✖ independent whole-tree observation rejects manifest, lock, intent, history, mode and unlisted-output tampering (5703.591915ms)
+  Error: Release lock may change only its two matching root version fields
+      at assertLock (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:295:52)
+      at checkReleaseTree (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:353:5)
+      at versionRelease (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:373:18)
+      at TestContext.<anonymous> (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/tests/release-candidate.test.ts:99:3)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at tests/release-candidate.test.ts:141:1
+✖ working and committed Git trees retain and reject tampering of an actual __proto__ file (4928.616629ms)
+  Error: Release lock may change only its two matching root version fields
+      at assertLock (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:295:52)
+      at checkReleaseTree (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:353:5)
+      at versionRelease (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:373:18)
+      at TestContext.<anonymous> (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/tests/release-candidate.test.ts:153:3)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at tests/release-candidate.test.ts:190:1
+✖ foreign physical roots are rejected and PATH/npm environment cannot replace the captured CLI (5191.932967ms)
+  Error: Release lock may change only its two matching root version fields
+      at assertLock (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:295:52)
+      at checkReleaseTree (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:353:5)
+      at versionRelease (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:373:18)
+      at TestContext.<anonymous> (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/tests/release-candidate.test.ts:206:22)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at tests/release-candidate.test.ts:213:1
+✖ release PR replay derives the exact version and changelog from its independent current base (4718.646516ms)
+  Error: Release lock may change only its two matching root version fields
+      at assertLock (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:295:52)
+      at checkReleaseTree (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:353:5)
+      at versionRelease (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:373:18)
+      at TestContext.<anonymous> (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/tests/release-candidate.test.ts:218:3)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at tests/release-candidate.test.ts:234:1
+✖ the genuinely generated 0.2.3 archive is the default installed Node, Bun and Node-in-Bun qualification input (5647.42092ms)
+  Error: Release lock may change only its two matching root version fields
+      at assertLock (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:295:52)
+      at checkReleaseTree (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:353:5)
+      at versionRelease (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/scripts/release-candidate.ts:373:18)
+      at TestContext.<anonymous> (file:///workspace/scratch/57dc7bcc28f6/TEST-node-or-bun-corrected-346pu0on/tests/release-candidate.test.ts:243:3)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)

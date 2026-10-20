@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 type Runtime = "node" | "bun";
@@ -12,7 +12,11 @@ const argument = (name: string): string | undefined => {
 const runtimeArgument = argument("runtime");
 const runtimes: Runtime[] =
   runtimeArgument === undefined ? ["node", "bun"] : [runtimeArgument === "bun" ? "bun" : "node"];
-const archive = resolve(argument("archive") ?? ".worker-tmp/pack/node-or-bun-0.2.2.tgz");
+const sourcePackage = JSON.parse(await readFile(resolve("package.json"), "utf8")) as { version?: unknown };
+if (typeof sourcePackage.version !== "string" || !/^\d+\.\d+\.\d+$/.test(sourcePackage.version)) {
+  throw new Error("Installed qualification requires a stable source package version");
+}
+const archive = resolve(argument("archive") ?? `.worker-tmp/pack/node-or-bun-${sourcePackage.version}.tgz`);
 
 const runCommand = (
   command: string,

@@ -47,13 +47,19 @@
     "test:node": "node --test dist-tests/tests/conformance.node.test.js dist-tests/tests/native-lifecycle.node.test.js",
     "test:bun": "bun test ./dist-tests/tests/conformance.bun.test.js ./dist-tests/tests/native-lifecycle.bun.test.js",
     "test:node-under-bun": "node scripts/run-node-under-bun.ts",
+    "test:release": "node --test tests/release-policy.test.ts tests/release-candidate.test.ts",
+    "release:status": "node scripts/version-release.ts --status",
+    "release:version": "node scripts/version-release.ts",
+    "release:check-pr": "node scripts/check-release-pr.ts",
     "pack": "node scripts/pack.ts",
     "qualify": "node scripts/qualify-installed-consumer.ts",
     "verify-toolchain": "node scripts/verify-toolchain.ts",
     "verify-node24": "node scripts/verify-node-compat.ts",
-    "check": "npm run verify-toolchain && npm run typecheck && npm run test && npm run test:node-under-bun && npm run pack && npm run qualify"
+    "check": "npm run verify-toolchain && npm run typecheck && npm run test:release && npm run test && npm run test:node-under-bun && npm run pack && npm run qualify"
   },
   "devDependencies": {
+    "@agent-teams/release-checks": "0.1.0",
+    "@changesets/cli": "3.0.2",
     "@types/bun": "1.4.3",
     "@types/node": "26.6.5",
     "typescript": "7.0.2"
