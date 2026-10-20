@@ -13,7 +13,7 @@ const manifest = {
   license: "MIT",
   repository: {
     type: "git",
-    url: "git+https://github.com/agent-teams-ai/process-runtime.git",
+    url: "git+https://github.com/agent-teams-ai/node-or-bun.git",
   },
   publishConfig: { access: "public" },
 };
