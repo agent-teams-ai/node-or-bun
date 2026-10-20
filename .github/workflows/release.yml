@@ -58,7 +58,7 @@ jobs:
       contents: read
       actions: write
       id-token: write
-    uses: agent-teams-ai/.github/.github/workflows/npm-publish.yml@839db96bd4c5a2b72d03e6c5265ab2466ed417f0
+    uses: agent-teams-ai/.github/.github/workflows/npm-publish.yml@d4a3acefd8cfd29b259535a7a003b545e77809e7
     with:
       phase: publish
       artifact-name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
@@ -108,7 +108,7 @@ jobs:
       contents: read
       actions: write
       id-token: write
-    uses: agent-teams-ai/.github/.github/workflows/npm-publish.yml@839db96bd4c5a2b72d03e6c5265ab2466ed417f0
+    uses: agent-teams-ai/.github/.github/workflows/npm-publish.yml@d4a3acefd8cfd29b259535a7a003b545e77809e7
     with:
       phase: promote
       artifact-name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
