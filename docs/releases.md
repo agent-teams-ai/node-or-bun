@@ -18,6 +18,9 @@ automatic run refuses to move a newer `latest` back to the source version.
 The pinned organization workflow publishes with npm Trusted Publishing under
 the `npm` environment, initially using a candidate tag. It reconciles an
 already published version only when registry bytes match the retained archive.
+Pin both reusable calls to a reviewed commit delivered on the central repository's
+main branch. Verify that Actions resolves the pin in a TEST caller before
+rollout; contents API access to a former pull-request head is insufficient.
 Consumer verification first matches both manifests, the complete receipt,
 source SHA, release run and archive hashes against the original retained bytes.
 It installs those downloaded bytes with lifecycle scripts
