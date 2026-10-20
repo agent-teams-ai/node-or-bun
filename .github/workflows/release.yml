@@ -1,24 +1,78 @@
 name: release
 
 on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
+  actions: read
 
+# Keep candidate publication, consumer verification and latest promotion together.
 concurrency:
   group: node-or-bun-release
   cancel-in-progress: false
 
 jobs:
-  publish:
-    if: github.ref == 'refs/heads/main'
+  prepare:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_sha == github.sha &&
+        github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-latest
-    environment: npm
+    outputs:
+      release: ${{ steps.prepare.outputs.release }}
+      archive: ${{ steps.prepare.outputs.archive }}
     steps:
-      - name: Check out reviewed main
+      - name: Check out the immutable release source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Node.js 26.11.1
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.11.1
+      - name: Validate complete exact-source CI and retain its original archive
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/prepare-release.ts
+      - name: Retain the immutable release manifest and original CI archive
+        if: steps.prepare.outputs.release == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .worker-tmp/release/
+          if-no-files-found: error
+
+  publish:
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
+    permissions:
+      contents: read
+      actions: write
+      id-token: write
+    uses: agent-teams-ai/.github/.github/workflows/npm-publish.yml@d4a3acefd8cfd29b259535a7a003b545e77809e7
+    with:
+      phase: publish
+      artifact-name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+      environment: npm
+
+  verify:
+    needs: [prepare, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the immutable qualification source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - name: Set up Node.js 26.11.1
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -27,12 +81,35 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.3
-      - name: Install pinned development tooling
+      - name: Install pinned qualification tooling without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Qualify the reviewed package
-        run: npm run check
-      - name: Publish through GitHub OIDC Trusted Publisher
-        run: |
-          set -- .worker-tmp/pack/*.tgz
-          test "$#" -eq 1
-          npm publish "$1" --access public --provenance
+      - name: Download the original source-bound archive
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .worker-tmp/original/
+      - name: Download the verified registry bytes
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}-registry
+          path: .worker-tmp/registry/
+      - name: Correlate original archive and registry receipt before execution
+        env:
+          ARCHIVE: ${{ needs.prepare.outputs.archive }}
+        run: node scripts/verify-release.ts
+      - name: Qualify installed Node and Bun consumers using registry bytes
+        env:
+          ARCHIVE: ${{ needs.prepare.outputs.archive }}
+        run: node scripts/qualify-installed-consumer.ts --archive ".worker-tmp/registry/$ARCHIVE"
+
+  promote:
+    needs: [prepare, verify]
+    permissions:
+      contents: read
+      actions: write
+      id-token: write
+    uses: agent-teams-ai/.github/.github/workflows/npm-publish.yml@d4a3acefd8cfd29b259535a7a003b545e77809e7
+    with:
+      phase: promote
+      artifact-name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+      environment: npm
