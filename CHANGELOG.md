@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 - 2026-10-20
+
+- Align repository metadata and documentation links with the GitHub repository
+  rename to `agent-teams-ai/node-or-bun`. The npm name and public API are unchanged.
+
 ## 0.2.1 - 2026-10-18
 
 - Preserve bounded, successfully decoded stdout/stderr on

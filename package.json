@@ -1,6 +1,6 @@
 {
   "name": "node-or-bun",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Runtime-agnostic process execution",
   "license": "MIT",
   "repository": {
