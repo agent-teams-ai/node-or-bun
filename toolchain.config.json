@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "profile": "typescript-node",
+  "typecheck": {
+    "projects": [
+      "tsconfig.root.json",
+      "tsconfig.node.json",
+      "tsconfig.bun.json",
+      "tsconfig.tests.json"
+    ]
+  },
+  "lint": {
+    "config": ".oxlintrc.json",
+    "paths": [
+      "src",
+      "tests",
+      "scripts"
+    ]
+  },
+  "format": {
+    "paths": [
+      "src",
+      "tests",
+      "scripts",
+      "toolchain.config.json",
+      ".oxlintrc.json",
+      "tsconfig.base.json",
+      "tsconfig.root.json",
+      "tsconfig.node.json",
+      "tsconfig.bun.json",
+      "tsconfig.tests.json",
+      "tsconfig.build.json",
+      "tsconfig.test-build.json",
+      "package.json"
+    ]
+  }
+}

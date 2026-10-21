@@ -133,8 +133,8 @@ if (nodeInsideBun.stdout !== "installed-node-under-bun-ok" || nodeInsideBun.exit
       runCommand(bun, ["install", "--production", "--ignore-scripts", "--no-save", archive], directory);
     }
 
-    const tsc = resolve("node_modules/typescript/bin/tsc");
-    runCommand(process.execPath, [tsc, "-p", "tsconfig.json"], directory);
+    const toolchain = resolve("node_modules/stack-toolchain/dist/cli.js");
+    runCommand(process.execPath, [toolchain, "compile", "--project", "tsconfig.json"], directory);
     if (runtime === "node") {
       runCommand(process.execPath, ["consumer.ts"], directory);
     } else {

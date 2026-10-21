@@ -117,3 +117,13 @@ and [the bounded scope
 record](https://github.com/agent-teams-ai/node-or-bun/blob/main/docs/plan-scope.md).
 The `docs/` directory is not part of the published package, so these links
 point at the repository copy.
+
+## Development checks
+
+The repository uses the exact development-only `stack-toolchain` release for
+`npm run typecheck`, `npm run lint`, `npm run format:check` and compilation.
+`toolchain.config.json` owns the four standalone source-checking projects and
+selected source paths. Runtime-specific types remain in this repository.
+`npm run check` retains adapter conformance, native lifecycle, packaging and
+installed-consumer qualification. The published library has no Toolchain or
+Engineering Foundation runtime dependency.

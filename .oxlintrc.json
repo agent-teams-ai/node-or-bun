@@ -1,0 +1,5 @@
+{
+  "extends": [
+    "./node_modules/stack-toolchain/presets/oxlint/node.json"
+  ]
+}
