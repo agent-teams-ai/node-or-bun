@@ -1,4 +1,11 @@
-import type { CompletionCause, Exit, ProcessAdapter, ProcessRunResult, Request, RunningProcess } from "../contract.js";
+import type {
+  CompletionCause,
+  Exit,
+  ProcessAdapter,
+  ProcessRunResult,
+  Request,
+  RunningProcess,
+} from "../contract.js";
 import { PROCESS_CLEANUP_STEP_MS } from "../contract.js";
 import { ProcessRuntimeError, isProcessRuntimeError, type ProcessErrorCode } from "../errors.js";
 import { createProcessExecutor } from "../executor.js";
@@ -11,9 +18,7 @@ export type ConformanceAdapterMode =
   | "pre-retain-failure"
   | "partial-hooks";
 
-export type ConformanceAdapterFactory = (
-  mode: ConformanceAdapterMode,
-) => ProcessAdapter;
+export type ConformanceAdapterFactory = (mode: ConformanceAdapterMode) => ProcessAdapter;
 
 export type ConformanceOptions = {
   readonly adapterFactory: ConformanceAdapterFactory;
@@ -28,7 +33,9 @@ const fail = (message: string): never => {
 };
 
 const assert = (condition: unknown, message: string): void => {
-  if (!condition) fail(message);
+  if (!condition) {
+    fail(message);
+  }
 };
 
 const expectError = async (
@@ -73,23 +80,29 @@ type Deferred<T> = {
 };
 
 const deferred = <T>(): Deferred<T> => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
+  let settle!: (value: T) => void;
+  const promise = new Promise<T>((resolve) => {
+    settle = resolve;
   });
-  return { promise, resolve };
+  return { promise, resolve: settle };
 };
 
 const delay = (milliseconds: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
+  new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 
 const syntheticStream = (
   values: readonly Uint8Array[] = [],
   failure?: () => Promise<never>,
 ): AsyncIterable<Uint8Array> => ({
   async *[Symbol.asyncIterator]() {
-    for (const value of values) yield value;
-    if (failure !== undefined) await failure();
+    for (const value of values) {
+      yield value;
+    }
+    if (failure !== undefined) {
+      await failure();
+    }
   },
 });
 
@@ -103,22 +116,22 @@ const syntheticRunning = (
   stderr,
   exited,
   cleanup,
-  closeCapture: async () => undefined,
+  closeCapture: async () => {},
 });
 
 const syntheticNeverEndingStream = (): AsyncIterable<Uint8Array> => ({
-  async *[Symbol.asyncIterator]() {
-    await new Promise<never>(() => undefined);
+  [Symbol.asyncIterator]() {
+    return { next: () => new Promise<IteratorResult<Uint8Array>>(() => {}) };
   },
 });
 
 const syntheticRun = async (
   running: RunningProcess,
-  request: Request,
+  syntheticRequest: Request,
 ): Promise<ProcessRunResult> =>
   createProcessExecutor({
     launch: async () => running,
-  }).run(request);
+  }).run(syntheticRequest);
 
 const expectSyntheticError = async (
   code: ProcessErrorCode,
@@ -151,7 +164,10 @@ const runArbitrationCases = async (): Promise<void> => {
     });
     controller.abort();
     const error = await expectSyntheticError("cancelled", () => resultPromise);
-    assert(error.facts.initiatingCause === "cancellation", "cancellation lost its initiating cause");
+    assert(
+      error.facts.initiatingCause === "cancellation",
+      "cancellation lost its initiating cause",
+    );
     assert(
       error.facts.completionRequestedBeforeExitObservation,
       "pre-exit cancellation lost its completion-order fact",
@@ -164,7 +180,12 @@ const runArbitrationCases = async (): Promise<void> => {
     assert(output?.stdout === "cancelled stdout\né", "cancellation lost captured stdout");
     assert(output?.stderr === "cancelled stderr\n", "cancellation lost captured stderr");
     assert(Object.isFrozen(output), "captured output can be mutated");
-    for (const diagnostic of [error.message, error.stack ?? "", JSON.stringify(error), JSON.stringify({ ...error })]) {
+    for (const diagnostic of [
+      error.message,
+      error.stack ?? "",
+      JSON.stringify(error),
+      JSON.stringify(Object.fromEntries(Object.entries(error))),
+    ]) {
       assert(!diagnostic.includes("cancelled stdout"), "ordinary error diagnostics exposed stdout");
       assert(!diagnostic.includes("cancelled stderr"), "ordinary error diagnostics exposed stderr");
     }
@@ -173,13 +194,20 @@ const runArbitrationCases = async (): Promise<void> => {
   // Detects: storing the caller's mutable object lets later writes replace
   // captured facts, or leak unrelated properties through explicit output access.
   {
-    const suppliedOutput = { stdout: "original stdout", stderr: "original stderr", extra: "private" };
+    const suppliedOutput = {
+      stdout: "original stdout",
+      stderr: "original stderr",
+      extra: "private",
+    };
     const error = new ProcessRuntimeError("cancelled", "cancelled", { output: suppliedOutput });
     suppliedOutput.stdout = "changed stdout";
     suppliedOutput.stderr = "changed stderr";
     assert(error.output?.stdout === "original stdout", "captured stdout was not snapshotted");
     assert(error.output?.stderr === "original stderr", "captured stderr was not snapshotted");
-    assert(error.output !== null && !("extra" in error.output), "output retained unrelated caller data");
+    assert(
+      error.output !== null && !("extra" in error.output),
+      "output retained unrelated caller data",
+    );
   }
 
   // Detects: cancellation must not hide a later capture failure.
@@ -262,14 +290,20 @@ const runArbitrationCases = async (): Promise<void> => {
       },
     };
     const error = await expectSyntheticError("stream", () => syntheticRun(running, baseRequest));
-    assert(error.message.includes("stdout capture failed"), "abnormal capture lost its initiating reason");
+    assert(
+      error.message.includes("stdout capture failed"),
+      "abnormal capture lost its initiating reason",
+    );
     assert(
       error.cause instanceof Error && error.cause.message === "early native read failure",
       "abnormal capture lost the native read cause",
     );
     assert(cleanupRequested, "abnormal capture skipped owned cleanup");
     assert(closeRequested, "abnormal capture skipped idempotent native close");
-    assert(!error.incompleteCustody, "successful abnormal-error cleanup claimed incomplete custody");
+    assert(
+      !error.incompleteCustody,
+      "successful abnormal-error cleanup claimed incomplete custody",
+    );
   }
 
   // Detects: an independently pending capture remains subject to the EOF
@@ -292,7 +326,7 @@ const runArbitrationCases = async (): Promise<void> => {
         },
       },
       exited: Promise.resolve({ exitCode: 0, signal: null }),
-      cleanup: async () => undefined,
+      cleanup: async () => {},
       closeCapture: async () => {
         closeRequested = true;
         pendingSettled?.({ done: true, value: undefined });
@@ -311,7 +345,10 @@ const runArbitrationCases = async (): Promise<void> => {
       error.cause instanceof Error && error.cause.message === "capture EOF deadline elapsed",
       "mixed pending capture lost the EOF-deadline cause",
     );
-    assert(Date.now() - started >= PROCESS_CLEANUP_STEP_MS, "mixed pending capture bypassed the EOF deadline");
+    assert(
+      Date.now() - started >= PROCESS_CLEANUP_STEP_MS,
+      "mixed pending capture bypassed the EOF deadline",
+    );
   }
 
   // Detects: rejected undefined is an explicit cleanup/close failure and is
@@ -403,9 +440,7 @@ const runArbitrationCases = async (): Promise<void> => {
   }
 };
 
-export const runProcessRuntimeConformance = async (
-  options: ConformanceOptions,
-): Promise<void> => {
+export const runProcessRuntimeConformance = async (options: ConformanceOptions): Promise<void> => {
   await runArbitrationCases();
 
   const exact = await run(options, "normal", {
@@ -413,7 +448,10 @@ export const runProcessRuntimeConformance = async (
     environment: { EXACT: "yes" },
   });
   assert(exact.stdout.includes('"argv":["echo","one","two"]'), "argv was not passed exactly");
-  assert(exact.stdout.includes(`"cwd":${JSON.stringify(options.workingDirectory)}`), "cwd was not passed");
+  assert(
+    exact.stdout.includes(`"cwd":${JSON.stringify(options.workingDirectory)}`),
+    "cwd was not passed",
+  );
   assert(exact.stdout.includes('"EXACT":"yes"'), "exact environment was not passed");
   assert(!exact.stdout.includes("INHERITED"), "supplied environment silently merged");
 
@@ -464,22 +502,35 @@ export const runProcessRuntimeConformance = async (
   assert(concurrent.stdout === "out-0out-1out-2", "concurrent stdout was reordered or truncated");
   assert(concurrent.stderr === "err-0err-1err-2", "concurrent stderr was reordered or truncated");
 
-  const numeric = await run(options, "normal", request(options, "exit", { args: [options.fixturePath, "exit", "7"] }));
+  const numeric = await run(
+    options,
+    "normal",
+    request(options, "exit", { args: [options.fixturePath, "exit", "7"] }),
+  );
   assert(numeric.exitCode === 7 && numeric.signal === null, "numeric exit facts changed");
-  assert(numeric.facts.initiatingCause === "exit", "numeric exit lost its neutral result classification");
+  assert(
+    numeric.facts.initiatingCause === "exit",
+    "numeric exit lost its neutral result classification",
+  );
   assert(numeric.facts.observedExit?.exitCode === 7, "numeric result lost its observed Exit fact");
   assert(numeric.facts.outputBounded, "normal capture did not retain bounded-output status");
 
   const signal = await run(options, "normal", request(options, "signal"));
   if (options.supportsSignalExit) {
-    assert(signal.exitCode === null && signal.signal !== null, "signal exit facts were not preserved");
+    assert(
+      signal.exitCode === null && signal.signal !== null,
+      "signal exit facts were not preserved",
+    );
   }
 
   const split = await run(options, "normal", request(options, "split-utf8"));
   assert(split.stdout === "AéB", "split UTF-8 bytes were decoded too early");
 
   const exactLimit = await run(options, "normal", request(options, "limit"));
-  assert(new TextEncoder().encode(exactLimit.stdout).byteLength === 4 * 1024 * 1024, "4 MiB capture limit rejected valid output");
+  assert(
+    new TextEncoder().encode(exactLimit.stdout).byteLength === 4 * 1024 * 1024,
+    "4 MiB capture limit rejected valid output",
+  );
 
   const invalidReplacement = await run(options, "normal", request(options, "invalid-utf8"));
   assert(invalidReplacement.stdout === "\uFFFD", "default UTF-8 replacement was not explicit");
@@ -489,15 +540,27 @@ export const runProcessRuntimeConformance = async (
       strictUtf8: true,
     }),
   );
-  assert(strictDecodeFailure.facts.initiatingCause === "decode", "strict decode lost its initiating cause");
-  assert(strictDecodeFailure.facts.lateFailureCodes.includes("invalid-output"), "strict decode code was not retained");
+  assert(
+    strictDecodeFailure.facts.initiatingCause === "decode",
+    "strict decode lost its initiating cause",
+  );
+  assert(
+    strictDecodeFailure.facts.lateFailureCodes.includes("invalid-output"),
+    "strict decode code was not retained",
+  );
 
   const overflowFailure = await expectError("output-limit", () =>
     run(options, "normal", request(options, "overflow")),
   );
-  assert(overflowFailure.facts.initiatingCause === "capture", "overflow lost its capture classification");
+  assert(
+    overflowFailure.facts.initiatingCause === "capture",
+    "overflow lost its capture classification",
+  );
   assert(overflowFailure.facts.outputBounded, "overflow lost bounded-output status");
-  assert(overflowFailure.output?.stdout.length === 4 * 1024 * 1024, "error output lost its bounded capture prefix");
+  assert(
+    overflowFailure.output?.stdout.length === 4 * 1024 * 1024,
+    "error output lost its bounded capture prefix",
+  );
   await expectError("invalid-input", async () => {
     options.adapterFactory("partial-hooks");
   });
@@ -515,14 +578,15 @@ export const runProcessRuntimeConformance = async (
   );
   // Detects: sparse argv holes must reject before any adapter launch.
   {
-    const adapter = options.adapterFactory("normal");
+    const sparseAdapter = options.adapterFactory("normal");
     let launchCount = 0;
-    const sparseArgs: string[] = new Array<string>(1);
+    const sparseArgs: string[] = [];
+    sparseArgs.length = 1;
     await expectError("invalid-input", () =>
       createProcessExecutor({
         launch: async (launch) => {
           launchCount += 1;
-          return adapter.launch(launch);
+          return sparseAdapter.launch(launch);
         },
       }).run({
         command: options.command,
@@ -554,7 +618,11 @@ export const runProcessRuntimeConformance = async (
     await readFile(marker);
     fail("pre-abort request created effects");
   } catch (error) {
-    assert((error as { code?: string }).code === "ENOENT", "pre-abort marker unexpectedly exists");
+    assert(
+      (typeof error === "object" && error !== null && "code" in error ? error.code : undefined) ===
+        "ENOENT",
+      "pre-abort marker unexpectedly exists",
+    );
   }
 
   const activeAbort = new AbortController();
@@ -573,9 +641,7 @@ export const runProcessRuntimeConformance = async (
     }),
   );
 
-  await expectError("launch", () =>
-    run(options, "setup-failure", request(options, "slow")),
-  );
+  await expectError("launch", () => run(options, "setup-failure", request(options, "slow")));
 
   // Detects: rollback cleanup failure must win over setup failure and retain
   // the initiating setup error plus incomplete-custody fact.
@@ -588,9 +654,7 @@ export const runProcessRuntimeConformance = async (
       setupCleanupFailure.initiatingError.message === "observer setup",
     `setup cleanup failure lost its initiating setup error: ${String(setupCleanupFailure.initiatingError)}`,
   );
-  await expectError("launch", () =>
-    run(options, "pre-retain-failure", request(options, "slow")),
-  );
+  await expectError("launch", () => run(options, "pre-retain-failure", request(options, "slow")));
 
   const cleanupFailure = await expectError("cleanup", () =>
     run(options, "cleanup-failure", {
@@ -599,7 +663,10 @@ export const runProcessRuntimeConformance = async (
     }),
   );
   assert(cleanupFailure.incompleteCustody, "cleanup failure did not retain incomplete custody");
-  assert(cleanupFailure.facts.initiatingCause === "timeout", "cleanup failure lost timeout arbitration facts");
+  assert(
+    cleanupFailure.facts.initiatingCause === "timeout",
+    "cleanup failure lost timeout arbitration facts",
+  );
   assert(
     isProcessRuntimeError(cleanupFailure.initiatingError) &&
       cleanupFailure.initiatingError.code === "timeout",
@@ -618,7 +685,7 @@ export const runProcessRuntimeConformance = async (
       stdout: syntheticNeverEndingStream(),
       stderr: syntheticNeverEndingStream(),
       exited: Promise.resolve({ exitCode: 0, signal: null }),
-      cleanup: async () => undefined,
+      cleanup: async () => {},
       closeCapture: async () => {
         closeRequested = true;
         throw new Error("synthetic native close failed");

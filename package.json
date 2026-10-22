@@ -7,9 +7,15 @@
     "type": "git",
     "url": "git+https://github.com/agent-teams-ai/node-or-bun.git"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "type": "module",
-  "types": "./dist/index.d.ts",
   "sideEffects": false,
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -28,15 +34,9 @@
       "import": "./dist/testing/conformance.js"
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE"
-  ],
-  "engines": {
-    "node": "^24.18.0 || ^26.0.0",
-    "bun": ">=1.4.3"
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "clean": "node scripts/clean.ts",
@@ -45,7 +45,7 @@
     "test": "npm run build && npm run build:tests && npm run test:node && npm run test:bun",
     "build:tests": "stack-toolchain compile --project tsconfig.test-build.json",
     "test:node": "node --test dist-tests/tests/conformance.node.test.js dist-tests/tests/native-lifecycle.node.test.js",
-    "test:bun": "bun test ./dist-tests/tests/conformance.bun.test.js ./dist-tests/tests/native-lifecycle.bun.test.js",
+    "test:bun": "node scripts/run-bun-tests.ts",
     "test:node-under-bun": "node scripts/run-node-under-bun.ts",
     "pack": "node scripts/pack.ts",
     "qualify": "node scripts/qualify-installed-consumer.ts",
@@ -60,8 +60,8 @@
     "@types/node": "26.6.5",
     "stack-toolchain": "0.1.0"
   },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
+  "engines": {
+    "bun": ">=1.4.3",
+    "node": "^24.18.0 || ^26.0.0"
   }
 }

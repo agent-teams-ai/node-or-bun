@@ -1,18 +1,25 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import type { ConformanceAdapterFactory, ConformanceOptions } from "../../src/testing/conformance.js";
+import type {
+  ConformanceAdapterFactory,
+  ConformanceOptions,
+} from "../../src/testing/conformance.js";
 import { createNodeProcessAdapter, type NodeCleanupHook } from "../../src/adapters/node.js";
 
 const killAndAwait: NodeCleanupHook = async (child) => {
   child.kill("SIGKILL");
-  await new Promise<void>((resolvePromise) => child.once("exit", () => resolvePromise()));
+  await new Promise<void>((_resolve) => {
+    child.once("exit", () => _resolve());
+  });
 };
 
 export const createNodeAdapterFactory: ConformanceAdapterFactory = (mode) => {
-  if (mode === "normal") return createNodeProcessAdapter();
+  if (mode === "normal") {
+    return createNodeProcessAdapter();
+  }
   if (mode === "partial-hooks") {
     return createNodeProcessAdapter({
-      acquire: () => undefined,
+      acquire: () => {},
     });
   }
   if (mode === "pre-retain-failure") {
@@ -20,7 +27,7 @@ export const createNodeAdapterFactory: ConformanceAdapterFactory = (mode) => {
       acquire: () => {
         throw new Error("before retain");
       },
-      cleanup: async () => undefined,
+      cleanup: async () => {},
     });
   }
   return createNodeProcessAdapter({
@@ -31,7 +38,9 @@ export const createNodeAdapterFactory: ConformanceAdapterFactory = (mode) => {
         stdio: ["ignore", "pipe", "pipe"],
       });
       retain(child);
-      if (mode === "setup-failure" || mode === "setup-cleanup-failure") throw new Error("observer setup");
+      if (mode === "setup-failure" || mode === "setup-cleanup-failure") {
+        throw new Error("observer setup");
+      }
     },
     cleanup:
       mode === "cleanup-failure"

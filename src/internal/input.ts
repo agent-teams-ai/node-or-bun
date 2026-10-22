@@ -27,7 +27,12 @@ const snapshotEnvironment = (
   const entries = Object.entries(value);
   const validated: [string, string][] = [];
   for (const [key, entryValue] of entries) {
-    if (typeof key !== "string" || typeof entryValue !== "string" || hasNul(key) || hasNul(entryValue)) {
+    if (
+      typeof key !== "string" ||
+      typeof entryValue !== "string" ||
+      hasNul(key) ||
+      hasNul(entryValue)
+    ) {
       throw processError("invalid-input", "environment entries must be strings without NUL");
     }
     validated.push([key, entryValue]);

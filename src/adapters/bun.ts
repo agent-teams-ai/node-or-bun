@@ -27,7 +27,9 @@ type ExitObservation = {
 };
 
 const signalName = (signal: NodeJS.Signals | number | null): string | null => {
-  if (signal === null) return null;
+  if (signal === null) {
+    return null;
+  }
   return typeof signal === "string" ? signal : String(signal);
 };
 
@@ -38,26 +40,29 @@ const observeExit = (child: BunChild): ExitObservation => {
     terminalResolve = resolve;
   });
   let settle!: (value: Exit) => void;
-  let reject!: (reason: unknown) => void;
-  const exited = new Promise<Exit>((resolve, rejectPromise) => {
+  let rejectExit!: (reason: unknown) => void;
+  const exited = new Promise<Exit>((resolve, reject) => {
     settle = resolve;
-    reject = rejectPromise;
+    rejectExit = reject;
   });
-  void exited.catch(() => undefined);
+  void exited.catch(() => {});
   void child.exited.then(
     () => {
-      if (terminal) return;
+      if (terminal) {
+        return false;
+      }
       terminal = true;
       terminalResolve();
       settle({
         exitCode: child.exitCode,
         signal: signalName(child.signalCode),
       });
+      return true;
     },
     (error: unknown) => {
       // Bun documents `exited` as resolving when the process exits; a rejection
       // is an observation error and is not accepted as terminal proof.
-      reject(processError("launch", "child process observation failed", error));
+      rejectExit(processError("launch", "child process observation failed", error));
     },
   );
   return {
@@ -70,8 +75,10 @@ const observeExit = (child: BunChild): ExitObservation => {
       });
       const settled = terminalProof.then(() => true);
       return Promise.race([settled, timeout]).finally(() => {
-        if (timer !== undefined) clearTimeout(timer);
-      }) as Promise<boolean>;
+        if (timer !== undefined) {
+          clearTimeout(timer);
+        }
+      });
     },
   };
 };
@@ -102,13 +109,17 @@ const captureStream = (native: ReadableStream<Uint8Array>): StreamCapture => {
   let iteratorUsed = false;
   let closePromise: Promise<void> | undefined;
   const release = (): void => {
-    if (released) return;
+    if (released) {
+      return;
+    }
     reader.releaseLock();
     released = true;
   };
   const close = (): Promise<void> => {
     closePromise ??= (async () => {
-      if (closed && released) return;
+      if (closed && released) {
+        return;
+      }
       closed = true;
       // Cancellation must run while this reader is still attached. Release is
       // attempted immediately and again after cancellation settles.
@@ -116,11 +127,10 @@ const captureStream = (native: ReadableStream<Uint8Array>): StreamCapture => {
       const firstRelease = settleOperation(release);
       const cancellationSettlement = await cancellation;
       const releases = [await firstRelease, await settleOperation(release)];
-      const failures = rejectedReasons([
-        cancellationSettlement,
-        ...releases,
-      ]);
-      if (failures.length === 1) throw failures[0];
+      const failures = rejectedReasons([cancellationSettlement, ...releases]);
+      if (failures.length === 1) {
+        throw failures[0];
+      }
       if (failures.length > 1) {
         throw new AggregateError(failures, "native reader closure failed");
       }
@@ -136,7 +146,9 @@ const captureStream = (native: ReadableStream<Uint8Array>): StreamCapture => {
         iteratorUsed = true;
         return {
           async next(): Promise<IteratorResult<Uint8Array>> {
-            if (closed) return { done: true, value: undefined };
+            if (closed) {
+              return { done: true, value: undefined };
+            }
             try {
               const result = await reader.read();
               if (result.done) {
@@ -146,14 +158,16 @@ const captureStream = (native: ReadableStream<Uint8Array>): StreamCapture => {
               }
               return { done: false, value: result.value };
             } catch (error) {
-              if (closed) return { done: true, value: undefined };
+              if (closed) {
+                return { done: true, value: undefined };
+              }
               throw error;
             }
           },
           async return(): Promise<IteratorResult<Uint8Array>> {
             // Do not replace an abnormal read cause with a later close error.
             // The executor observes this same idempotent close after cleanup.
-            void close().catch(() => undefined);
+            void close().catch(() => {});
             return { done: true, value: undefined };
           },
         };
@@ -189,7 +203,9 @@ const createRunning = (
       return cleanupPromise;
     },
     closeCapture: () => {
-      closePromise ??= Promise.all([stdout.close(), stderr.close()]).then(() => undefined);
+      closePromise ??= (async () => {
+        await Promise.all([stdout.close(), stderr.close()]);
+      })();
       return closePromise;
     },
   };
@@ -199,7 +215,9 @@ const defaultAcquire = (request: Launch, retain: BunRetain): void => {
   const environment: Record<string, string> =
     request.environment === undefined
       ? Object.fromEntries(
-          Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+          Object.entries(process.env).filter(
+            (entry): entry is [string, string] => entry[1] !== undefined,
+          ),
         )
       : { ...request.environment };
   const child = Bun.spawn([request.command, ...request.args], {
@@ -210,9 +228,7 @@ const defaultAcquire = (request: Launch, retain: BunRetain): void => {
   retain(child);
 };
 
-export const createBunProcessAdapter = (
-  options: BunProcessAdapterOptions = {},
-): ProcessAdapter => {
+export const createBunProcessAdapter = (options: BunProcessAdapterOptions = {}): ProcessAdapter => {
   const hasAcquire = options.acquire !== undefined;
   const hasCleanup = options.cleanup !== undefined;
   if (hasAcquire !== hasCleanup) {
@@ -243,19 +259,20 @@ export const createBunProcessAdapter = (
         }
         const observed = observation ?? observeExit(child);
         const cleanupSettlement = await settleOperation(() =>
-          (customCleanup ?? ((target, cause) => defaultCleanup(target, cause, observed)))(child, "failed"),
+          (
+            customCleanup ??
+            ((target, cleanupCause) => defaultCleanup(target, cleanupCause, observed))
+          )(child, "failed"),
         );
         const closeSettlement = await settleOperation(() =>
           closeBunCaptureWithin(child, captureOwners),
         );
-        const failures = rejectedReasons([
-          cleanupSettlement,
-          closeSettlement,
-        ]);
+        const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
         if (failures.length > 0) {
-          const cleanupCause = failures.length === 1
-            ? failures[0]
-            : new AggregateError(failures, "cleanup and capture closure both failed");
+          const cleanupCause =
+            failures.length === 1
+              ? failures[0]
+              : new AggregateError(failures, "cleanup and capture closure both failed");
           throw withCause(
             new ProcessRuntimeError("cleanup", "process setup cleanup failed", {
               cause: cleanupCause,
@@ -299,7 +316,9 @@ const closeBunCapture = async (
 ): Promise<void> => {
   const operations: (() => Promise<void>)[] = captureOwners.map((capture) => () => capture.close());
   for (const stream of [child.stdout, child.stderr]) {
-    if (!(stream instanceof ReadableStream) || stream.locked) continue;
+    if (!(stream instanceof ReadableStream) || stream.locked) {
+      continue;
+    }
     operations.push(async () => {
       await stream.cancel();
     });
@@ -308,14 +327,18 @@ const closeBunCapture = async (
     operations.map((operation) => settleWithin(operation, PROCESS_CLEANUP_STEP_MS)),
   );
   const failures = settled.flatMap((settlement): unknown[] => {
-    if (settlement.status === "rejected") return [settlement.reason];
+    if (settlement.status === "rejected") {
+      return [settlement.reason];
+    }
     if (settlement.status === "timeout") {
       return [processError("cleanup", "native capture close or reader settlement timed out")];
     }
     return [];
   });
   if (failures.length > 0) {
-    throw failures.length === 1 ? failures[0] : new AggregateError(failures, "native capture closure failed");
+    throw failures.length === 1
+      ? failures[0]
+      : new AggregateError(failures, "native capture closure failed");
   }
 };
 

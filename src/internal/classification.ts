@@ -83,16 +83,12 @@ export const classifyProcessOutcome = ({
   if (initiatingFailure !== undefined) {
     return {
       kind: "error",
-      error: new ProcessRuntimeError(
-        initiatingFailure.code,
-        initiatingFailure.error.message,
-        {
-          output,
-          cause: initiatingFailure.error.cause,
-          initiatingError: initiatingFailure.error,
-          facts: facts({ ...shared, incompleteCustody: false }),
-        },
-      ),
+      error: new ProcessRuntimeError(initiatingFailure.code, initiatingFailure.error.message, {
+        output,
+        cause: initiatingFailure.error.cause,
+        initiatingError: initiatingFailure.error,
+        facts: facts({ ...shared, incompleteCustody: false }),
+      }),
     };
   }
 
