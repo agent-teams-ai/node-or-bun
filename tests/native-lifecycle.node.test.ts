@@ -308,9 +308,8 @@ const waitForTerminal = async (
   }
 };
 
-void test("Bun runtime rejects invalid explicit path and version and ignores npm bin shadow", async () => {
+void test("Bun runtime rejects invalid explicit path and version and ignores npm bin shadow", async (context) => {
   const { bunRuntime } = await import("../scripts/bun-runtime.js");
-  const qualifiedBun = bunRuntime();
   const originalBin = process.env.BUN_BIN;
   const originalPath = process.env.PATH;
   const directory = await mkdtemp(join(resolve("sandbox"), "TEST-bun-resolution-"));
@@ -319,14 +318,37 @@ void test("Bun runtime rejects invalid explicit path and version and ignores npm
     assert.throws(() => bunRuntime(), /Bun 1.4.3 runtime unavailable/u);
     process.env.BUN_BIN = process.env.NODE_EXECUTABLE ?? process.execPath;
     assert.throws(() => bunRuntime(), /Bun 1.4.3 runtime unavailable/u);
-    delete process.env.BUN_BIN;
-    const shadowDirectory = join(directory, "node_modules", ".bin");
-    await mkdir(shadowDirectory, { recursive: true });
-    const shadow = join(shadowDirectory, process.platform === "win32" ? "bun.exe" : "bun");
-    await copyFile(qualifiedBun, shadow);
-    assert.equal(spawnSync(shadow, ["--version"], { encoding: "utf8" }).stdout.trim(), "1.4.3");
-    process.env.PATH = shadowDirectory;
-    assert.throws(() => bunRuntime(), /Bun 1.4.3 runtime unavailable/u);
+    if (originalBin === undefined) {
+      delete process.env.BUN_BIN;
+    } else {
+      process.env.BUN_BIN = originalBin;
+    }
+    await context.test("qualified Bun executable shadow is ignored", async (shadowContext) => {
+      let qualifiedBun: string;
+      try {
+        qualifiedBun = bunRuntime();
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          !error.message.startsWith("Bun 1.4.3 runtime unavailable") ||
+          process.versions.node.split(".")[0] !== "24" ||
+          process.versions.bun !== undefined ||
+          originalBin !== undefined
+        ) {
+          throw error;
+        }
+        shadowContext.skip("This runtime-only job does not install a qualified Bun runtime");
+        return;
+      }
+      delete process.env.BUN_BIN;
+      const shadowDirectory = join(directory, "node_modules", ".bin");
+      await mkdir(shadowDirectory, { recursive: true });
+      const shadow = join(shadowDirectory, process.platform === "win32" ? "bun.exe" : "bun");
+      await copyFile(qualifiedBun, shadow);
+      assert.equal(spawnSync(shadow, ["--version"], { encoding: "utf8" }).stdout.trim(), "1.4.3");
+      process.env.PATH = shadowDirectory;
+      assert.throws(() => bunRuntime(), /Bun 1.4.3 runtime unavailable/u);
+    });
   } finally {
     if (originalBin === undefined) {
       delete process.env.BUN_BIN;
