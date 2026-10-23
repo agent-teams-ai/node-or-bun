@@ -91,7 +91,9 @@ access or serialization of `error.output` still exposes captured content.
 
 ## Development and CI evidence
 
-The pinned tools are Node.js 26.11.1, Bun 1.4.3, and TypeScript 7.0.2. The
+The pinned development entrypoint is Stack Toolchain 0.1.0, with official
+TypeScript 7.0.2 for compilation and tsrs → Bun check → TypeScript 7.0.2 for
+qualified type checks. Native runtime tests use Node.js 26.11.1 and Bun 1.4.3. The
 runtime contract remains Node.js `^24.18.0 || ^26.0.0` and Bun `>=1.4.3`.
 
 ```sh
@@ -117,3 +119,13 @@ and [the bounded scope
 record](https://github.com/agent-teams-ai/node-or-bun/blob/main/docs/plan-scope.md).
 The `docs/` directory is not part of the published package, so these links
 point at the repository copy.
+
+## Development checks
+
+The repository uses the exact development-only `stack-toolchain` release for
+`npm run typecheck`, `npm run lint`, `npm run format:check` and compilation.
+`toolchain.config.json` owns the four standalone source-checking projects and
+selected source paths. Runtime-specific types remain in this repository.
+`npm run check` retains adapter conformance, native lifecycle, packaging and
+installed-consumer qualification. The published library has no Toolchain or
+Engineering Foundation runtime dependency.

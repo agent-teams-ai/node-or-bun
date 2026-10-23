@@ -108,11 +108,16 @@ registry version is installed with npm, and `package-lock.json` records its
 real resolved URL and integrity. No local dependency or guessed registry
 integrity is a production substitute.
 
-Disposable qualification uses the separately retained, actually packed
-corrected `0.0.0` candidate archive. The [2026-10-20 qualification
-record](decisions/evidence/release-checks-20261020/README.md) binds its hashes,
-strict typecheck and 27 passing release tests to the checked source snapshot.
-Such source/typecheck/engine tests establish local preparation only.
+Disposable qualification uses an actually packed `0.0.0` candidate archive.
+The [2026-10-23 integration
+record](decisions/evidence/release-checks-20261023/README.md) binds its hashes to
+current main `0.2.3`, the retained development-only Stack Toolchain, passing
+typecheck/lint/format and all 29 release tests. A separate actual Changesets run
+derived `0.2.4` from that current source, then the owner build, pack and installed
+Node/Bun/Node-in-Bun checks passed in an owned TEST checkout. The historical
+[2026-10-20 record](decisions/evidence/release-checks-20261020/README.md) remains
+unchanged. These checks establish local preparation only; the real release
+version must be derived again from the then-current accepted main.
 Exact final-head native CI, owner review/merge, the generated
 metadata release, registry readback and installed Node/Bun/Node-in-Bun
 qualification remain separate required evidence. An automatic same-version

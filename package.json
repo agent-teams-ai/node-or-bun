@@ -1,15 +1,21 @@
 {
   "name": "node-or-bun",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Runtime-agnostic process execution",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/agent-teams-ai/node-or-bun.git"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "type": "module",
-  "types": "./dist/index.d.ts",
   "sideEffects": false,
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -28,24 +34,18 @@
       "import": "./dist/testing/conformance.js"
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE"
-  ],
-  "engines": {
-    "node": "^24.18.0 || ^26.0.0",
-    "bun": ">=1.4.3"
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "clean": "node scripts/clean.ts",
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.root.json && tsc -p tsconfig.node.json && tsc -p tsconfig.bun.json && tsc -p tsconfig.tests.json",
+    "build": "stack-toolchain compile --project tsconfig.build.json",
+    "typecheck": "stack-toolchain typecheck",
     "test": "npm run build && npm run build:tests && npm run test:node && npm run test:bun",
-    "build:tests": "tsc -p tsconfig.test-build.json",
+    "build:tests": "stack-toolchain compile --project tsconfig.test-build.json",
     "test:node": "node --test dist-tests/tests/conformance.node.test.js dist-tests/tests/native-lifecycle.node.test.js",
-    "test:bun": "bun test ./dist-tests/tests/conformance.bun.test.js ./dist-tests/tests/native-lifecycle.bun.test.js",
+    "test:bun": "node scripts/run-bun-tests.ts",
     "test:node-under-bun": "node scripts/run-node-under-bun.ts",
     "test:release": "node --test tests/release-policy.test.ts tests/release-candidate.test.ts",
     "release:status": "node scripts/version-release.ts --status",
@@ -55,17 +55,19 @@
     "qualify": "node scripts/qualify-installed-consumer.ts",
     "verify-toolchain": "node scripts/verify-toolchain.ts",
     "verify-node24": "node scripts/verify-node-compat.ts",
-    "check": "npm run verify-toolchain && npm run typecheck && npm run test:release && npm run test && npm run test:node-under-bun && npm run pack && npm run qualify"
+    "check": "npm run verify-toolchain && npm run typecheck && npm run lint && npm run format:check && npm run test:release && npm run test && npm run test:node-under-bun && npm run pack && npm run qualify",
+    "lint": "stack-toolchain lint",
+    "format:check": "stack-toolchain format:check"
   },
   "devDependencies": {
     "@agent-teams/release-checks": "0.1.0",
     "@changesets/cli": "3.0.2",
     "@types/bun": "1.4.3",
     "@types/node": "26.6.5",
-    "typescript": "7.0.2"
+    "stack-toolchain": "0.1.0"
   },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
+  "engines": {
+    "bun": ">=1.4.3",
+    "node": "^24.18.0 || ^26.0.0"
   }
 }

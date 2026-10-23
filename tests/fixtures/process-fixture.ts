@@ -47,14 +47,18 @@ const main = async (): Promise<void> => {
       await write(process.stdout, new Uint8Array(4 * 1024 * 1024));
       return;
     case "late-overflow":
-      await new Promise((resolve) => setTimeout(resolve, 75));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 75);
+      });
       await write(process.stdout, new Uint8Array(4 * 1024 * 1024 + 1));
       return;
     case "touch":
       writeFileSync(value, "x");
       return;
     case "slow":
-      await new Promise((resolve) => setTimeout(resolve, 750));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 750);
+      });
       return;
     default:
       process.exitCode = 64;

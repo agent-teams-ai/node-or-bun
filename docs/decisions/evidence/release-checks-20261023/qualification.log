@@ -1,0 +1,233 @@
+Local disposable TEST qualification, 2026-10-23.
+All commands below exited 0. Public npm adoption and GitHub CI are not established by this record.
+
+$ npm run verify-toolchain
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.3 verify-toolchain
+> node scripts/verify-toolchain.ts
+
+toolchain verified: Node 26.11.1, Stack Toolchain 0.1.0, Bun 1.4.3
+
+$ npm run typecheck
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.3 typecheck
+> stack-toolchain typecheck
+
+typecheck: passed
+{
+  "status": "passed",
+  "engine": "tsrs",
+  "attempts": [
+    {
+      "engine": "tsrs",
+      "result": {
+        "outcome": {
+          "kind": "passed"
+        },
+        "captureComplete": true,
+        "cleanupComplete": true,
+        "diagnostics": []
+      },
+      "durationMs": 587.786034
+    }
+  ]
+}
+
+$ npm run lint
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.3 lint
+> stack-toolchain lint
+
+lint: passed
+{
+  "exitCode": 0,
+  "signal": null,
+  "stdout": "Found 0 warnings and 0 errors.\nFinished in 242ms on 37 files with 181 rules using 8 threads.\n",
+  "stderr": "",
+  "facts": {
+    "initiatingCause": "exit",
+    "completionRequestedBeforeExitObservation": false,
+    "observedExit": {
+      "exitCode": 0,
+      "signal": null
+    },
+    "lateFailureCodes": [],
+    "outputBounded": true,
+    "incompleteCustody": false
+  }
+}
+
+$ npm run format:check
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.3 format:check
+> stack-toolchain format:check
+
+format:check: passed
+{
+  "exitCode": 0,
+  "signal": null,
+  "stdout": "Checking formatting...\n\nAll matched files use the correct format.\nFinished in 9ms on 48 files using 8 threads.\n",
+  "stderr": "",
+  "facts": {
+    "initiatingCause": "exit",
+    "completionRequestedBeforeExitObservation": false,
+    "observedExit": {
+      "exitCode": 0,
+      "signal": null
+    },
+    "lateFailureCodes": [],
+    "outputBounded": true,
+    "incompleteCustody": false
+  }
+}
+
+$ npm run test:release
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.3 test:release
+> node --test tests/release-policy.test.ts tests/release-candidate.test.ts
+
+✔ installed common conformance: direct-dependent-empty-and-unchanged-none (9.110738ms)
+✔ installed common conformance: no-release-with-empty-intent-and-none (1.095714ms)
+✔ installed common conformance: existing-retained-file-consumption (1.667846ms)
+✔ installed common conformance: nested-packages-without-root-manifest (2.492281ms)
+✔ installed common conformance: unclassified-root-manifest (0.864934ms)
+✔ installed common conformance: unknown-input (0.466417ms)
+✔ installed common conformance: stale-config-binding (1.318061ms)
+✔ installed common conformance: hidden-export-change-despite-permission (1.137375ms)
+✔ installed common conformance: exact-planned-version-mismatch (1.013303ms)
+✔ installed common conformance: missing-original-consumption-digest (2.041747ms)
+✔ installed common conformance: unlisted-generated-output (1.037048ms)
+✔ installed common conformance: duplicate-direct-link (0.322855ms)
+✔ actual Changesets v3 generates the public root patch, consumes empty intent, then npm synchronizes only root lock versions (6400.503102ms)
+✔ an actual empty-only official plan performs no versioning and retains its intent (3429.466992ms)
+✔ the actual pinned reader excludes source documentation from intents while whole-tree checks protect its bytes (9126.584025ms)
+✔ independent whole-tree observation rejects manifest, lock, intent, history, mode and unlisted-output tampering (12940.312528ms)
+✔ working and committed Git trees retain and reject tampering of an actual __proto__ file (51204.781176ms)
+✔ versioning rejects source, config, engine, HEAD and Git-directory changes after planning (10090.409684ms)
+✔ foreign physical roots are rejected and PATH/npm environment cannot replace the captured CLI (5561.152275ms)
+✔ release PR replay derives the exact version and changelog from its independent current base (17113.838675ms)
+✔ the genuinely generated 0.2.3 archive is the default installed Node, Bun and Node-in-Bun qualification input (8438.54815ms)
+✔ release rejects unrelated, stale, PR, incomplete or partially green CI (2.083529ms)
+✔ release rejects stale attempt artifacts, expired artifacts and wrong-source archives (0.686681ms)
+✔ a queued docs commit still releases its unpublished source version without rolling latest back (0.709896ms)
+✔ registry errors and malformed metadata cannot be interpreted as package absence (0.307252ms)
+✔ release manifest binds archive bytes and rejects wrong package or unsafe paths (6.482587ms)
+✔ qualification rejects incomplete, cross-run, cross-source and mismatched original/registry evidence (1.278163ms)
+✔ release decoders reject malformed external JSON before policy evaluation (0.711919ms)
+✔ npm pack receipt requires one archive record and a safe filename (0.533315ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 124627.291685
+
+$ npm run release:status (owned TEST source 0.2.3)
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.3 release:status
+> node scripts/version-release.ts --status
+
+{
+  "source": "379f628fae9f2101e7ce36eddb579b87d00aaba9",
+  "hasRelease": true,
+  "plan": {
+    "changesets": [
+      {
+        "releases": [
+          {
+            "name": "node-or-bun",
+            "type": "patch"
+          }
+        ],
+        "summary": "Add development tooling for Changesets version generation and independent\nrelease-candidate checks. This changes the published package manifest's\ndevelopment dependencies and scripts. The process runtime API and behavior\nremain unchanged.",
+        "id": "release-checks-metadata"
+      }
+    ],
+    "releases": [
+      {
+        "name": "node-or-bun",
+        "type": "patch",
+        "oldVersion": "0.2.3",
+        "changesets": [
+          "release-checks-metadata"
+        ],
+        "newVersion": "0.2.4"
+      }
+    ]
+  }
+}
+
+$ npm run release:version (owned TEST source 0.2.3)
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.3 release:version
+> node scripts/version-release.ts
+
+{
+  "source": "379f628fae9f2101e7ce36eddb579b87d00aaba9",
+  "hasRelease": true,
+  "report": {
+    "schemaVersion": 1,
+    "outcome": "passed",
+    "diagnostics": [],
+    "packageChanges": [
+      {
+        "packageName": "node-or-bun",
+        "manifestPath": "package.json",
+        "oldVersion": "0.2.3",
+        "newVersion": "0.2.4"
+      }
+    ]
+  }
+}
+
+$ npm run build (Changesets-generated TEST 0.2.4)
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.4 build
+> stack-toolchain compile --project tsconfig.build.json
+
+compile: passed
+{
+  "exitCode": 0,
+  "signal": null,
+  "stdout": "",
+  "stderr": "",
+  "facts": {
+    "initiatingCause": "exit",
+    "completionRequestedBeforeExitObservation": false,
+    "observedExit": {
+      "exitCode": 0,
+      "signal": null
+    },
+    "lateFailureCodes": [],
+    "outputBounded": true,
+    "incompleteCustody": false
+  }
+}
+
+$ npm run pack (Changesets-generated TEST 0.2.4)
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.4 pack
+> node scripts/pack.ts
+
+/tmp/TEST-node-or-bun-integration-oct23-w5emr_f9/.worker-tmp/pack/node-or-bun-0.2.4.tgz
+sha256=4645783156fb87db362ce908d353fd0681102200e6142a3dee7902ae751ae7a3
+sri=sha256-RkV4MVb7h9s2LOkI01P9BoEQIgDmFCo97nkCrnUa56M=
+
+$ npm run qualify (Changesets-generated TEST 0.2.4)
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> node-or-bun@0.2.4 qualify
+> node scripts/qualify-installed-consumer.ts
+
+installed consumer qualification passed: node, bun

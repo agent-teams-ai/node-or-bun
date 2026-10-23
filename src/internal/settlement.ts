@@ -2,9 +2,7 @@ export type Settlement<T> =
   | { readonly status: "fulfilled"; readonly value: T }
   | { readonly status: "rejected"; readonly reason: unknown };
 
-export type BoundedSettlement<T> =
-  | Settlement<T>
-  | { readonly status: "timeout" };
+export type BoundedSettlement<T> = Settlement<T> | { readonly status: "timeout" };
 
 export const settleOperation = async <T>(
   operation: () => T | PromiseLike<T>,
@@ -25,24 +23,23 @@ export const settleWithin = async <T>(
     timer = setTimeout(() => resolve({ status: "timeout" }), timeoutMs);
   });
   try {
-    return await Promise.race(
-      [
-        Promise.resolve()
-          .then(operation)
-          .then((value) => ({ status: "fulfilled" as const, value })),
-        timeout,
-      ] as Promise<BoundedSettlement<Awaited<T>>>[],
-    );
+    return await Promise.race([
+      (async (): Promise<BoundedSettlement<Awaited<T>>> => {
+        await Promise.resolve();
+        return { status: "fulfilled", value: await operation() };
+      })(),
+      timeout,
+    ] satisfies Promise<BoundedSettlement<Awaited<T>>>[]);
   } catch (reason) {
     return { status: "rejected", reason };
   } finally {
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
   }
 };
 
-export const rejectedReasons = (
-  settlements: readonly Settlement<unknown>[],
-): unknown[] =>
+export const rejectedReasons = (settlements: readonly Settlement<unknown>[]): unknown[] =>
   settlements.flatMap((settlement) =>
     settlement.status === "rejected" ? [settlement.reason] : [],
   );

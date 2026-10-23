@@ -1,5 +1,8 @@
 import { resolve } from "node:path";
-import type { ConformanceAdapterFactory, ConformanceOptions } from "../../src/testing/conformance.js";
+import type {
+  ConformanceAdapterFactory,
+  ConformanceOptions,
+} from "../../src/testing/conformance.js";
 import { createBunProcessAdapter, type BunCleanupHook } from "../../src/adapters/bun.js";
 
 const killAndAwait: BunCleanupHook = async (child) => {
@@ -8,10 +11,12 @@ const killAndAwait: BunCleanupHook = async (child) => {
 };
 
 export const createBunAdapterFactory: ConformanceAdapterFactory = (mode) => {
-  if (mode === "normal") return createBunProcessAdapter();
+  if (mode === "normal") {
+    return createBunProcessAdapter();
+  }
   if (mode === "partial-hooks") {
     return createBunProcessAdapter({
-      acquire: () => undefined,
+      acquire: () => {},
     });
   }
   if (mode === "pre-retain-failure") {
@@ -19,7 +24,7 @@ export const createBunAdapterFactory: ConformanceAdapterFactory = (mode) => {
       acquire: () => {
         throw new Error("before retain");
       },
-      cleanup: async () => undefined,
+      cleanup: async () => {},
     });
   }
   return createBunProcessAdapter({
@@ -30,7 +35,9 @@ export const createBunAdapterFactory: ConformanceAdapterFactory = (mode) => {
         stdio: ["ignore", "pipe", "pipe"],
       });
       retain(child);
-      if (mode === "setup-failure" || mode === "setup-cleanup-failure") throw new Error("observer setup");
+      if (mode === "setup-failure" || mode === "setup-cleanup-failure") {
+        throw new Error("observer setup");
+      }
     },
     cleanup:
       mode === "cleanup-failure"

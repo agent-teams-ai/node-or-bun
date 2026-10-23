@@ -16,10 +16,7 @@ import {
   type ProcessErrorCode,
   type ProcessInitiatingCause,
 } from "./errors.js";
-import {
-  classifyProcessOutcome,
-  type InitiatingFailure,
-} from "./internal/classification.js";
+import { classifyProcessOutcome, type InitiatingFailure } from "./internal/classification.js";
 import { decodeCapture, drainCapture, type CaptureRead } from "./internal/capture.js";
 import { snapshotRequest } from "./internal/input.js";
 import {
@@ -35,11 +32,11 @@ type Deferred<T> = {
 };
 
 const deferred = <T>(): Deferred<T> => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
+  let settle!: (value: T) => void;
+  const promise = new Promise<T>((resolve) => {
+    settle = resolve;
   });
-  return { promise, resolve };
+  return { promise, resolve: settle };
 };
 
 type WaitResult<T> =
@@ -64,9 +61,8 @@ const wait = async <T>(promise: Promise<T>, timeoutMs: number): Promise<WaitResu
 };
 
 const captureError = (value: unknown, streamName: "stdout" | "stderr"): ProcessRuntimeError => {
-  const code = isProcessRuntimeError(value) && value.code === "output-limit"
-    ? "output-limit"
-    : "stream";
+  const code =
+    isProcessRuntimeError(value) && value.code === "output-limit" ? "output-limit" : "stream";
   return new ProcessRuntimeError(
     code,
     code === "output-limit" ? "captured output exceeded 4 MiB" : `${streamName} capture failed`,
@@ -74,7 +70,9 @@ const captureError = (value: unknown, streamName: "stdout" | "stderr"): ProcessR
   );
 };
 
-const initiatingCause = (cause: CompletionCause | "capture" | "observation"): ProcessInitiatingCause => {
+const initiatingCause = (
+  cause: CompletionCause | "capture" | "observation",
+): ProcessInitiatingCause => {
   switch (cause) {
     case "timeout":
       return "timeout";
@@ -87,6 +85,8 @@ const initiatingCause = (cause: CompletionCause | "capture" | "observation"): Pr
       return "observation";
     case "exited":
       return "exit";
+    default:
+      throw new Error("unknown completion cause");
   }
 };
 
@@ -117,7 +117,9 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
         cause: CompletionCause | "capture" | "observation",
       ): void => {
         if (initiatingFailure !== undefined) {
-          if (cause === "capture") addLateFailureCode(error.code);
+          if (cause === "capture") {
+            addLateFailureCode(error.code);
+          }
           return;
         }
         const state: InitiatingFailure = {
@@ -130,7 +132,7 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
         failure.resolve(state);
       };
 
-      if (snapshot.signal !== undefined && Boolean(snapshot.signal.aborted)) {
+      if (snapshot.signal !== undefined && snapshot.signal.aborted) {
         throw new ProcessRuntimeError("cancelled", "process request was already cancelled", {
           initiatingError: snapshot.signal.reason,
           facts: {
@@ -158,8 +160,10 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
               }
             }, snapshot.timeoutMs);
 
-      if (snapshot.signal !== undefined && Boolean(snapshot.signal.aborted)) {
-        if (timer !== undefined) clearTimeout(timer);
+      if (snapshot.signal !== undefined && snapshot.signal.aborted) {
+        if (timer !== undefined) {
+          clearTimeout(timer);
+        }
         snapshot.signal.removeEventListener("abort", onAbort);
         throw new ProcessRuntimeError("cancelled", "process request was already cancelled", {
           initiatingError: snapshot.signal.reason,
@@ -174,7 +178,9 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       try {
         running = await adapter.launch(snapshot.launch);
       } catch (cause) {
-        if (timer !== undefined) clearTimeout(timer);
+        if (timer !== undefined) {
+          clearTimeout(timer);
+        }
         snapshot.signal?.removeEventListener("abort", onAbort);
         if (isProcessRuntimeError(cause) && cause.code === "cleanup") {
           throw new ProcessRuntimeError("cleanup", "process cleanup did not complete", {
@@ -188,19 +194,15 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
           });
         }
         if (initiatingFailure !== undefined) {
-          throw new ProcessRuntimeError(
-            initiatingFailure.code,
-            initiatingFailure.error.message,
-            {
-              cause: initiatingFailure.error.cause,
-              initiatingError: initiatingFailure.error,
-              facts: {
-                initiatingCause: initiatingFailure.cause,
-                completionRequestedBeforeExitObservation,
-                lateFailureCodes,
-              },
+          throw new ProcessRuntimeError(initiatingFailure.code, initiatingFailure.error.message, {
+            cause: initiatingFailure.error.cause,
+            initiatingError: initiatingFailure.error,
+            facts: {
+              initiatingCause: initiatingFailure.cause,
+              completionRequestedBeforeExitObservation,
+              lateFailureCodes,
             },
-          );
+          });
         }
         if (isProcessRuntimeError(cause)) {
           throw cause;
@@ -247,7 +249,9 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
       const firstObservation = await Promise.race([exitObservation, failureObservation]);
 
       if (firstObservation.kind === "exit" && initiatingFailure === undefined) {
-        if (timer !== undefined) clearTimeout(timer);
+        if (timer !== undefined) {
+          clearTimeout(timer);
+        }
         snapshot.signal?.removeEventListener("abort", onAbort);
       }
 
@@ -269,9 +273,10 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
           Promise.all([close, settleOperation(() => captures)]).then(() => true),
           PROCESS_CLEANUP_STEP_MS,
         );
-        const closeFailure = closeSettlement !== undefined && closeSettlement.status === "rejected"
-          ? closeSettlement
-          : undefined;
+        const closeFailure =
+          closeSettlement !== undefined && closeSettlement.status === "rejected"
+            ? closeSettlement
+            : undefined;
         if (settled.status === "timeout") {
           throw closeFailure === undefined
             ? new Error("native capture close or reader settlement remained open")
@@ -279,7 +284,7 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
         }
         if (closeFailure !== undefined) {
           throw closeFailure.reason === undefined
-            ? withCause(new Error("native capture closure failed"), undefined)
+            ? withCause(new Error("native capture closure failed"), closeFailure.reason)
             : closeFailure.reason;
         }
         if (forcedAfterEofDeadline) {
@@ -289,25 +294,30 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
 
       let cleanupFailure: { readonly reason: unknown } | undefined;
       const cleanupSettlement = await settleOperation(() =>
-        running.cleanup(initiatingFailure?.cause === "timeout"
-          ? "timeout"
-          : initiatingFailure?.cause === "cancellation"
-            ? "cancelled"
-            : firstObservation.kind === "exit"
-              ? "exited"
-              : "failed"),
+        running.cleanup(
+          initiatingFailure?.cause === "timeout"
+            ? "timeout"
+            : initiatingFailure?.cause === "cancellation"
+              ? "cancelled"
+              : firstObservation.kind === "exit"
+                ? "exited"
+                : "failed",
+        ),
       );
       const closeSettlement = await settleOperation(() => closeAndSettleCapture());
       const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
       if (failures.length > 0) {
         cleanupFailure = {
-          reason: failures.length === 1
-            ? failures[0]
-            : new AggregateError(failures, "cleanup and capture closure both failed"),
+          reason:
+            failures.length === 1
+              ? failures[0]
+              : new AggregateError(failures, "cleanup and capture closure both failed"),
         };
       }
 
-      if (timer !== undefined) clearTimeout(timer);
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
       snapshot.signal?.removeEventListener("abort", onAbort);
       await wait(exitObservation, PROCESS_CLEANUP_STEP_MS);
 

@@ -1,16 +1,38 @@
+import type { createProcessExecutor as Executor } from "../src/executor.js";
+import type { createNodeProcessAdapter as Adapter } from "../src/adapters/node.js";
 import assert from "node:assert/strict";
-import type { createProcessExecutor as CreateProcessExecutor } from "../src/executor.js";
-import type { createNodeProcessAdapter as CreateNodeProcessAdapter } from "../src/adapters/node.js";
-
-type RootModule = { readonly createProcessExecutor: typeof CreateProcessExecutor };
-type NodeModule = { readonly createNodeProcessAdapter: typeof CreateNodeProcessAdapter };
 
 const [major, minor] = process.versions.node.split(".").map((value) => Number(value));
 assert.equal(major, 24, `Node 24 runtime required, received ${process.versions.node}`);
-assert.ok(minor !== undefined && minor >= 18, `Node 24.18+ required, received ${process.versions.node}`);
+assert.ok(
+  minor !== undefined && minor >= 18,
+  `Node 24.18+ required, received ${process.versions.node}`,
+);
 
-const root = (await import(new URL("../dist/index.js", import.meta.url).href)) as RootModule;
-const node = (await import(new URL("../dist/adapters/node.js", import.meta.url).href)) as NodeModule;
+function isExecutor(value: unknown): value is typeof Executor {
+  return typeof value === "function";
+}
+function isAdapter(value: unknown): value is typeof Adapter {
+  return typeof value === "function";
+}
+const root: unknown = await import(new URL("../dist/index.js", import.meta.url).href);
+const node: unknown = await import(new URL("../dist/adapters/node.js", import.meta.url).href);
+if (
+  typeof root !== "object" ||
+  root === null ||
+  !("createProcessExecutor" in root) ||
+  !isExecutor(root.createProcessExecutor)
+) {
+  throw new Error("Missing executor export");
+}
+if (
+  typeof node !== "object" ||
+  node === null ||
+  !("createNodeProcessAdapter" in node) ||
+  !isAdapter(node.createNodeProcessAdapter)
+) {
+  throw new Error("Missing Node adapter export");
+}
 const result = await root.createProcessExecutor(node.createNodeProcessAdapter()).run({
   command: process.execPath,
   args: ["-e", "process.stdout.write('node24-ok'); process.stderr.write('node24-err')"],

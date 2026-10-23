@@ -1,3 +1,4 @@
+import { packedFilename } from "./release-policy.ts";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
@@ -13,7 +14,7 @@ const npmInvocation = process.env.NPM_BIN
     : ["npm"];
 const packed = spawnSync(
   npmInvocation[0] ?? "npm",
-  [...(npmInvocation.slice(1)), "pack", "--json", "--pack-destination", destination],
+  [...npmInvocation.slice(1), "pack", "--json", "--pack-destination", destination],
   {
     encoding: "utf8",
     env: {
@@ -28,8 +29,7 @@ if (packed.status !== 0) {
   process.stderr.write(packed.stderr);
   process.exit(packed.status ?? 1);
 }
-const packedMetadata = JSON.parse(packed.stdout) as Record<string, { filename: string }>;
-const filename = Object.values(packedMetadata)[0]?.filename;
+const filename = packedFilename(JSON.parse(packed.stdout));
 if (filename === undefined) {
   process.stderr.write(packed.stdout);
   process.stderr.write(packed.stderr);
