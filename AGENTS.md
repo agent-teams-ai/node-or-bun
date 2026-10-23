@@ -1,7 +1,9 @@
 # Agent instructions
 
 This repository owns a production-importable process mechanism. It must not
-depend on Engineering Foundation, Electron, or consumer business policy.
+depend at runtime on Engineering Foundation, Stack Toolchain, Electron, or consumer
+business policy. Stack Toolchain is permitted only as an exact development dependency
+for repository checks and compilation; it must never enter production dependencies.
 
 Before planning, implementing, or reviewing changes, read the canonical
 [organization Engineering Quality Standard](https://github.com/agent-teams-ai/.github/blob/main/docs/engineering-quality-standard.md).

@@ -53,7 +53,8 @@ export const drainCapture = async (
         continue;
       }
       const remaining = PROCESS_CAPTURE_LIMIT_BYTES - length;
-      const accepted = chunk.byteLength <= remaining ? chunk : chunk.subarray(0, Math.max(0, remaining));
+      const accepted =
+        chunk.byteLength <= remaining ? chunk : chunk.subarray(0, Math.max(0, remaining));
       if (accepted.byteLength > 0) {
         chunks.push(accepted);
         length += accepted.byteLength;

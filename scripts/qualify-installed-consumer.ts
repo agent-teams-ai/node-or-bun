@@ -1,6 +1,9 @@
+import { bunRuntime } from "./bun-runtime.ts";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { packageIdentity } from "./release-policy.ts";
 
 type Runtime = "node" | "bun";
 
@@ -12,7 +15,10 @@ const argument = (name: string): string | undefined => {
 const runtimeArgument = argument("runtime");
 const runtimes: Runtime[] =
   runtimeArgument === undefined ? ["node", "bun"] : [runtimeArgument === "bun" ? "bun" : "node"];
-const archive = resolve(argument("archive") ?? ".worker-tmp/pack/node-or-bun-0.2.2.tgz");
+const metadata = packageIdentity(JSON.parse(readFileSync("package.json", "utf8")));
+const archive = resolve(
+  argument("archive") ?? `.worker-tmp/pack/node-or-bun-${metadata.version}.tgz`,
+);
 
 const runCommand = (
   command: string,
@@ -39,8 +45,12 @@ const runCommand = (
 };
 
 const npmArguments = (args: readonly string[]): [string, string[]] => {
-  if (process.env.NPM_BIN) return [process.env.NPM_BIN, [...args]];
-  if (process.env.npm_execpath) return [process.execPath, [process.env.npm_execpath, ...args]];
+  if (process.env.NPM_BIN) {
+    return [process.env.NPM_BIN, [...args]];
+  }
+  if (process.env.npm_execpath) {
+    return [process.execPath, [process.env.npm_execpath, ...args]];
+  }
   return ["npm", [...args]];
 };
 
@@ -57,7 +67,7 @@ const qualify = async (runtime: Runtime): Promise<void> => {
         ? `import { createProcessExecutor } from "node-or-bun";
 import { createNodeProcessAdapter } from "node-or-bun/node";
 import { runProcessRuntimeConformance } from "node-or-bun/testing";
-if (typeof runProcessRuntimeConformance !== "function") throw new Error("testing subpath is unavailable");
+if (typeof runProcessRuntimeConformance !== "function") {throw new Error("testing subpath is unavailable");}
 const result = await createProcessExecutor(createNodeProcessAdapter()).run({
   command: process.execPath,
   args: ["-e", "process.stdout.write('installed-node-ok')"],
@@ -72,7 +82,7 @@ if (result.stdout !== "installed-node-ok" || result.exitCode !== 0) {
 import { createBunProcessAdapter } from "node-or-bun/bun";
 import { createNodeProcessAdapter } from "node-or-bun/node";
 import { runProcessRuntimeConformance } from "node-or-bun/testing";
-if (typeof runProcessRuntimeConformance !== "function") throw new Error("testing subpath is unavailable");
+if (typeof runProcessRuntimeConformance !== "function") {throw new Error("testing subpath is unavailable");}
 const native = await createProcessExecutor(createBunProcessAdapter()).run({
   command: process.execPath,
   args: ["-e", "process.stdout.write('installed-bun-ok')"],
@@ -92,11 +102,7 @@ if (nodeInsideBun.stdout !== "installed-node-under-bun-ok" || nodeInsideBun.exit
   throw new Error("installed /node transport inside Bun failed");
 }
 `;
-    await writeFile(
-      join(directory, "consumer.ts"),
-      consumerSource,
-      "utf8",
-    );
+    await writeFile(join(directory, "consumer.ts"), consumerSource, "utf8");
     await writeFile(
       join(directory, "tsconfig.json"),
       `${JSON.stringify(
@@ -129,16 +135,20 @@ if (nodeInsideBun.stdout !== "installed-node-under-bun-ok" || nodeInsideBun.exit
       ]);
       runCommand(command, args, directory);
     } else {
-      const bun = process.env.BUN_BIN ?? "bun";
-      runCommand(bun, ["install", "--production", "--ignore-scripts", "--no-save", archive], directory);
+      const bun = bunRuntime();
+      runCommand(
+        bun,
+        ["install", "--production", "--ignore-scripts", "--no-save", archive],
+        directory,
+      );
     }
 
-    const tsc = resolve("node_modules/typescript/bin/tsc");
-    runCommand(process.execPath, [tsc, "-p", "tsconfig.json"], directory);
+    const toolchain = resolve("node_modules/stack-toolchain/dist/cli.js");
+    runCommand(process.execPath, [toolchain, "compile", "--project", "tsconfig.json"], directory);
     if (runtime === "node") {
       runCommand(process.execPath, ["consumer.ts"], directory);
     } else {
-      runCommand(process.env.BUN_BIN ?? "bun", ["consumer.ts"], directory, {
+      runCommand(bunRuntime(), ["consumer.ts"], directory, {
         NODE_EXECUTABLE: process.execPath,
       });
     }

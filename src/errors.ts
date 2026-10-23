@@ -49,11 +49,7 @@ export class ProcessRuntimeError extends Error {
   /** Bounded decoded captures, or null if either capture/decode is unavailable. */
   declare readonly output: ProcessCapturedOutput | null;
 
-  constructor(
-    code: ProcessErrorCode,
-    message: string,
-    options: ProcessRuntimeErrorOptions = {},
-  ) {
+  constructor(code: ProcessErrorCode, message: string, options: ProcessRuntimeErrorOptions = {}) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "ProcessRuntimeError";
     this.code = code;
@@ -61,9 +57,10 @@ export class ProcessRuntimeError extends Error {
     // Keep captured content out of ordinary error enumeration/JSON. Explicit
     // access is still sensitive and callers decide whether to expose it.
     Object.defineProperty(this, "output", {
-      value: options.output == null
-        ? null
-        : Object.freeze({ stdout: options.output.stdout, stderr: options.output.stderr }),
+      value:
+        options.output === null || options.output === undefined
+          ? null
+          : Object.freeze({ stdout: options.output.stdout, stderr: options.output.stderr }),
       enumerable: false,
       writable: false,
       configurable: false,
@@ -75,8 +72,7 @@ export class ProcessRuntimeError extends Error {
       observedExit: options.facts?.observedExit ?? null,
       lateFailureCodes: Object.freeze([...(options.facts?.lateFailureCodes ?? [])]),
       outputBounded: options.facts?.outputBounded ?? false,
-      incompleteCustody:
-        options.facts?.incompleteCustody ?? options.incompleteCustody ?? false,
+      incompleteCustody: options.facts?.incompleteCustody ?? options.incompleteCustody ?? false,
     });
   }
 
@@ -85,9 +81,7 @@ export class ProcessRuntimeError extends Error {
   }
 }
 
-export const isProcessRuntimeError = (
-  value: unknown,
-): value is ProcessRuntimeError =>
+export const isProcessRuntimeError = (value: unknown): value is ProcessRuntimeError =>
   value instanceof ProcessRuntimeError;
 
 export const processError = (

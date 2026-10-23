@@ -1,0 +1,4 @@
+# Keep checked source and JSON formatting identical on every checkout platform.
+*.ts text eol=lf
+*.json text eol=lf
+.gitattributes text eol=lf

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.3 - 2026-10-23
+
+- Adopt exact published `stack-toolchain@0.1.0` for development typecheck, lint,
+  formatting checks and TypeScript compilation. Runtime-specific types and native
+  Node/Bun conformance remain owned by this repository.
+- Keep Stack Toolchain and Engineering Foundation out of production dependencies;
+  the public process API and runtime guarantees remain unchanged.
+- Resolve the explicitly qualified Bun test runtime independently of optional
+  development tool binaries and derive the default qualification archive from
+  the reviewed package version.
+
 ## 0.2.2 - 2026-10-20
 
 - Align repository metadata and documentation links with the GitHub repository

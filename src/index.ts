@@ -13,11 +13,7 @@ export {
   PROCESS_CLEANUP_STEP_MS,
   PROCESS_TIMEOUT_MAX_MS,
 } from "./contract.js";
-export {
-  ProcessRuntimeError,
-  isProcessRuntimeError,
-  processError,
-} from "./errors.js";
+export { ProcessRuntimeError, isProcessRuntimeError, processError } from "./errors.js";
 export type {
   ProcessCapturedOutput,
   ProcessErrorCode,

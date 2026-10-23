@@ -25,13 +25,13 @@ approved as a supported release and must not be used as a runtime dependency.
 
 await rm(staging, { force: true, recursive: true });
 await mkdir(staging, { recursive: true });
+await writeFile(resolve(staging, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+await writeFile(resolve(staging, "README.md"), readme, "utf8");
 await writeFile(
-  resolve(staging, "package.json"),
-  `${JSON.stringify(manifest, null, 2)}\n`,
+  resolve(staging, "LICENSE"),
+  await readFile(resolve(packageRoot, "LICENSE")),
   "utf8",
 );
-await writeFile(resolve(staging, "README.md"), readme, "utf8");
-await writeFile(resolve(staging, "LICENSE"), await readFile(resolve(packageRoot, "LICENSE")), "utf8");
 await writeFile(resolve(staging, ".npmignore"), ".worker-tmp/\n", "utf8");
 
 const env: NodeJS.ProcessEnv = {
@@ -40,11 +40,12 @@ const env: NodeJS.ProcessEnv = {
 };
 delete env.NPM_BIN;
 
-const packed = spawnSync(
-  process.execPath,
-  [resolve(packageRoot, "scripts/pack.ts")],
-  { cwd: staging, env, encoding: "utf8", stdio: "inherit" },
-);
+const packed = spawnSync(process.execPath, [resolve(packageRoot, "scripts/pack.ts")], {
+  cwd: staging,
+  env,
+  encoding: "utf8",
+  stdio: "inherit",
+});
 if (packed.error !== undefined) {
   throw packed.error;
 }
