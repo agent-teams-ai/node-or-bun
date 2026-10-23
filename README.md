@@ -91,7 +91,9 @@ access or serialization of `error.output` still exposes captured content.
 
 ## Development and CI evidence
 
-The pinned tools are Node.js 26.11.1, Bun 1.4.3, and TypeScript 7.0.2. The
+The pinned development entrypoint is Stack Toolchain 0.1.0, with official
+TypeScript 7.0.2 for compilation and tsrs → Bun check → TypeScript 7.0.2 for
+qualified type checks. Native runtime tests use Node.js 26.11.1 and Bun 1.4.3. The
 runtime contract remains Node.js `^24.18.0 || ^26.0.0` and Bun `>=1.4.3`.
 
 ```sh

@@ -2,6 +2,8 @@ import { bunRuntime } from "./bun-runtime.ts";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { packageIdentity } from "./release-policy.ts";
 
 type Runtime = "node" | "bun";
 
@@ -13,7 +15,10 @@ const argument = (name: string): string | undefined => {
 const runtimeArgument = argument("runtime");
 const runtimes: Runtime[] =
   runtimeArgument === undefined ? ["node", "bun"] : [runtimeArgument === "bun" ? "bun" : "node"];
-const archive = resolve(argument("archive") ?? ".worker-tmp/pack/node-or-bun-0.2.2.tgz");
+const metadata = packageIdentity(JSON.parse(readFileSync("package.json", "utf8")));
+const archive = resolve(
+  argument("archive") ?? `.worker-tmp/pack/node-or-bun-${metadata.version}.tgz`,
+);
 
 const runCommand = (
   command: string,
