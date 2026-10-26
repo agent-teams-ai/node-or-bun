@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.4
+
+### Patch Changes
+
+- 479cf00: Add development tooling for Changesets version generation and independent
+  release-candidate checks. This changes the published package manifest's
+  development dependencies and scripts. The process runtime API and behavior
+  remain unchanged.
+
 ## 0.2.3 - 2026-10-23
 
 - Adopt exact published `stack-toolchain@0.1.0` for development typecheck, lint,
