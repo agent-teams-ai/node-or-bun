@@ -1,11 +1,24 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { assertToolchainDoctor, developmentToolchain } from "../scripts/toolchain-policy.ts";
+import {
   assertCiArtifact,
   assertRegistryRelease,
   assertReleaseCi,
   automaticReleaseDecision,
   registryVersion,
+  jsonRecord,
   releaseManifest,
   type CiArtifact,
   type CiJob,
@@ -247,4 +260,199 @@ void test("npm pack receipt requires one archive record and a safe filename", as
   ]) {
     assert.throws(() => packedFilename(invalid));
   }
+});
+
+const toolPins = {
+  schemaVersion: 1,
+  typescript: "7.0.2",
+  oxlint: "1.83.0",
+  "oxlint-tsgolint": "7.0.2001",
+  oxfmt: "0.74.0",
+};
+function writeJson(filename: string, value: unknown): void {
+  mkdirSync(dirname(filename), { recursive: true });
+  writeFileSync(filename, JSON.stringify(value));
+}
+function toolchainFixture(
+  action: (root: string, packageRoot: string, parent: string) => void,
+): void {
+  const parent = mkdtempSync(join(tmpdir(), "node-or-bun-toolchain-"));
+  const root = join(parent, "consumer");
+  const packageRoot = join(root, "node_modules/stack-toolchain");
+  try {
+    writeJson(join(root, "package.json"), { devDependencies: { "stack-toolchain": "0.1.0" } });
+    writeJson(join(packageRoot, "package.json"), {
+      name: "stack-toolchain",
+      version: "0.1.0",
+      exports: {
+        "./package.json": "./package.json",
+        "./toolchain-manifest.json": "./toolchain-manifest.json",
+      },
+      bin: { "stack-toolchain": "cli.js" },
+    });
+    writeJson(join(packageRoot, "toolchain-manifest.json"), toolPins);
+    writeFileSync(join(packageRoot, "cli.js"), "// metadata fixture; never executed\n");
+    action(root, packageRoot, parent);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+}
+function doctorReport(version: string): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    command: "doctor",
+    status: "passed",
+    exitCode: 0,
+    details: {
+      schemaVersion: 1,
+      packageVersion: version,
+      findings: [],
+      ...Object.fromEntries(
+        Object.entries(toolPins)
+          .filter(([key]) => key !== "schemaVersion")
+          .map(([key, pin]) => [
+            key,
+            { available: true, expectedVersion: pin, installedVersion: pin, resolvedVersion: pin },
+          ]),
+      ),
+    },
+  };
+}
+
+void test("development Stack follows a matching exact root pin without qualifying a future engine", () => {
+  toolchainFixture((root, packageRoot) => {
+    for (const version of ["0.1.0", "0.2.0"]) {
+      writeJson(join(root, "package.json"), { devDependencies: { "stack-toolchain": version } });
+      const metadata = jsonRecord(
+        JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")),
+      );
+      writeJson(join(packageRoot, "package.json"), { ...metadata, version });
+      const toolchain = developmentToolchain(root);
+      assert.equal(toolchain.version, version);
+      // Pure metadata/doctor-shape fixture: no CLI or hypothetical engine executes.
+      assert.doesNotThrow(() => assertToolchainDoctor(doctorReport(version), toolchain));
+    }
+  });
+});
+
+void test("development Stack rejects noncanonical, duplicate and mismatched declarations", () => {
+  toolchainFixture((root, packageRoot) => {
+    for (const pin of [
+      undefined,
+      "^0.1.0",
+      "latest",
+      "npm:stack-toolchain@0.1.0",
+      "file:../stack",
+      "git+https://example.invalid/stack.git",
+      "workspace:*",
+      "0.1.0-rc.1",
+      "01.1.0",
+      "0.1.0+build",
+    ]) {
+      writeJson(join(root, "package.json"), { devDependencies: { "stack-toolchain": pin } });
+      assert.throws(() => developmentToolchain(root), /canonical stable exact/);
+    }
+    for (const section of ["dependencies", "optionalDependencies", "peerDependencies"]) {
+      writeJson(join(root, "package.json"), {
+        devDependencies: { "stack-toolchain": "0.1.0" },
+        [section]: { "stack-toolchain": "0.1.0" },
+      });
+      assert.throws(() => developmentToolchain(root), /canonical stable exact/);
+    }
+    writeJson(join(root, "package.json"), { devDependencies: { "stack-toolchain": "0.1.0" } });
+    const metadata = jsonRecord(
+      JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")),
+    );
+    for (const changed of [{ name: "other" }, { version: "0.0.9" }]) {
+      writeJson(join(packageRoot, "package.json"), { ...metadata, ...changed });
+      assert.throws(() => developmentToolchain(root), /Installed Stack identity/);
+    }
+    writeJson(join(packageRoot, "package.json"), metadata);
+    writeJson(join(packageRoot, "toolchain-manifest.json"), { ...toolPins, schemaVersion: 2 });
+    assert.throws(() => developmentToolchain(root), /manifest schema/);
+  });
+});
+
+void test("development Stack refuses ancestor, escaped package and escaped public CLI resolution", () => {
+  toolchainFixture((root, _packageRoot, parent) => {
+    renameSync(join(root, "node_modules"), join(parent, "node_modules"));
+    assert.throws(() => developmentToolchain(root), /outside its local owner/);
+  });
+  toolchainFixture((root, packageRoot, parent) => {
+    const outside = join(parent, "outside-stack");
+    renameSync(packageRoot, outside);
+    symlinkSync(outside, packageRoot, "junction");
+    assert.throws(() => developmentToolchain(root), /outside its local owner/);
+  });
+  toolchainFixture((root, packageRoot) => {
+    writeFileSync(join(root, "node_modules/outside-cli.js"), "// never executed\n");
+    const metadata = jsonRecord(
+      JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")),
+    );
+    writeJson(join(packageRoot, "package.json"), {
+      ...metadata,
+      bin: { "stack-toolchain": "../outside-cli.js" },
+    });
+    assert.throws(() => developmentToolchain(root), /outside its local owner/);
+  });
+  toolchainFixture((root, packageRoot, parent) => {
+    const outside = join(parent, "outside-manifest");
+    writeJson(join(outside, "toolchain-manifest.json"), toolPins);
+    symlinkSync(outside, join(packageRoot, "borrowed"), "junction");
+    const metadata = jsonRecord(
+      JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")),
+    );
+    writeJson(join(packageRoot, "package.json"), {
+      ...metadata,
+      exports: {
+        "./package.json": "./package.json",
+        "./toolchain-manifest.json": "./borrowed/toolchain-manifest.json",
+      },
+    });
+    assert.throws(() => developmentToolchain(root), /outside its local owner/);
+  });
+});
+
+void test("development Stack refuses malformed doctor identity and required companion observations", () => {
+  toolchainFixture((root) => {
+    const toolchain = developmentToolchain(root);
+    for (const changed of [
+      { schemaVersion: 2 },
+      { command: "lint" },
+      { status: "failed" },
+      { exitCode: 1 },
+    ]) {
+      assert.throws(() =>
+        assertToolchainDoctor({ ...doctorReport(toolchain.version), ...changed }, toolchain),
+      );
+    }
+    for (const changed of [
+      { schemaVersion: 2 },
+      { packageVersion: "0.0.9" },
+      { findings: [{ severity: "error" }] },
+    ]) {
+      const report = doctorReport(toolchain.version);
+      assert.throws(() =>
+        assertToolchainDoctor(
+          { ...report, details: { ...jsonRecord(report.details), ...changed } },
+          toolchain,
+        ),
+      );
+    }
+    for (const name of ["typescript", "oxlint", "oxlint-tsgolint", "oxfmt"]) {
+      for (const changed of [{ available: false }, { resolvedVersion: "0.0.9" }]) {
+        const report = doctorReport(toolchain.version);
+        const details = jsonRecord(report.details);
+        assert.throws(() =>
+          assertToolchainDoctor(
+            {
+              ...report,
+              details: { ...details, [name]: { ...jsonRecord(details[name]), ...changed } },
+            },
+            toolchain,
+          ),
+        );
+      }
+    }
+  });
 });
