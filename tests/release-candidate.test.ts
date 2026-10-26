@@ -193,7 +193,7 @@ void test("the actual pinned reader excludes source documentation from intents w
       `# Accepted source documentation\n\nPreserve ${path}.\n`,
     );
   }
-  git(source.root, "add", "--all");
+  git(source.root, "add", "--force", "--", ...documentation);
   git(source.root, "commit", "-m", "test: admit documentation beside actual intents");
   const prepared = captureRelease(
     source.root,

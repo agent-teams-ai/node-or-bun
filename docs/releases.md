@@ -99,26 +99,24 @@ remain `node-or-bun` and its existing subpaths.
 
 ## Current adoption checkpoint
 
-The consumer source targets the intended exact
-`@agent-teams/release-checks@0.1.0` development dependency. That public coordinate
-has not yet been published at this preparation checkpoint, so its registry lock
-entry and real consumer adoption are pending. Do not merge this dependency
-change until the owning Foundation publication has completed, the actual
-registry version is installed with npm, and `package-lock.json` records its
-real resolved URL and integrity. No local dependency or guessed registry
-integrity is a production substitute.
+The consumer now records the exact public
+`@agent-teams/release-checks@0.1.0` development dependency and its authentic npm
+registry URL and integrity. Actual npm 11.20.0 generated the lock, and a fresh
+`npm ci --ignore-scripts --no-audit --no-fund` installed the public package.
+The complete parsed lock graph changed only by that exact leaf package record
+and its root development dependency; the root remains `0.2.3`.
 
-Disposable qualification uses an actually packed `0.0.0` candidate archive.
-The [2026-10-23 integration
-record](decisions/evidence/release-checks-20261023/README.md) binds its hashes to
-current main `0.2.3`, the retained development-only Stack Toolchain, passing
-typecheck/lint/format and all 29 release tests. A separate actual Changesets run
-derived `0.2.4` from that current source, then the owner build, pack and installed
-Node/Bun/Node-in-Bun checks passed in an owned TEST checkout. The historical
-[2026-10-20 record](decisions/evidence/release-checks-20261020/README.md) remains
-unchanged. These checks establish local preparation only; the real release
-version must be derived again from the then-current accepted main.
-Exact final-head native CI, owner review/merge, the generated
-metadata release, registry readback and installed Node/Bun/Node-in-Bun
-qualification remain separate required evidence. An automatic same-version
-skip is not reconciliation or publication proof.
+The [2026-10-26 adoption record](decisions/evidence/release-checks-20261026/README.md)
+retains the public package/source binding, current local checks and remaining
+delivery gates. The historical
+[2026-10-23 preparation record](decisions/evidence/release-checks-20261023/README.md)
+and [2026-10-20 record](decisions/evidence/release-checks-20261020/README.md)
+remain unchanged and describe their original TEST-only checkpoints.
+
+Exact final-head native CI, technical review and implementation merge remain
+pending. Changesets must derive the metadata patch from the then-current accepted
+main; the earlier TEST `0.2.4` observation does not authorize copying a version
+or changelog. The official version PR, exact-source archive publication and
+reconciliation, registry readback, installed Node/Bun/Node-in-Bun qualification
+and `latest` promotion remain separate required evidence. An automatic
+same-version skip is not reconciliation or publication proof.
