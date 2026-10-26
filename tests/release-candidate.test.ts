@@ -389,6 +389,10 @@ void test("versioning rejects source, config, engine, HEAD and Git-directory cha
 
 void test("foreign physical roots are rejected and PATH/npm environment cannot replace the captured CLI", (t) => {
   const source = fixture(t);
+  assert.throws(
+    () => captureRelease(join(source.root, ".changeset"), source.source, releaseNpmEntrypoint()),
+    /actual repository root/,
+  );
   const prepared = prepare(source);
   const moved = join(source.directory, "moved-source");
   renameSync(source.root, moved);

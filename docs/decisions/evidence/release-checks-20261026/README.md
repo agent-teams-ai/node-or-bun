@@ -71,3 +71,28 @@ verification and latest promotion must follow `docs/releases.md`.
 Final normal release-suite output: [release-tests.log](release-tests.log), SHA-256
 `ceb04a81538d8ef52aa2bf826873aa55880bca73a200b9ff77f90226bdc836f1`.
 [Parsed lock verification](lock-verification.json) retains the full-graph comparison result.
+
+## Native Windows follow-up
+
+PR #13 native Windows execution at `283b3b0` passed all 12 public leaf
+conformance cases but rejected all nine actual Host scenarios at the same
+repository-root string comparison. Linux passed. The captured error establishes
+the failed comparison; differing Windows path spellings are an inference because
+the original error did not log both paths.
+
+The Host now compares actual directory objects using bigint `stat` device and
+inode identity after resolving the caller and Git top-level paths. It rejects
+non-directories and unavailable zero inode identity, and retains root identity
+in execution custody. Captured root, Git/common directories, HEAD and engine
+checks stay intact. No universal path case folding or foreign-root exception
+was added. The existing foreign-root scenario additionally rejects a nested
+`.changeset` caller root.
+
+Node documents that [realpath performs no case conversion and canonical paths
+need not be unique](https://nodejs.org/api/fs.html#fsrealpathpath-options-callback),
+and defines [device](https://nodejs.org/api/fs.html#statsdev) and
+[inode](https://nodejs.org/api/fs.html#statsino) identity fields. The change uses
+bigint values to avoid precision loss. Typecheck, lint and format checks pass.
+The three focused actual generation, source/Git-directory tamper and foreign-root
+regressions pass (3/3, no skips); the latter includes the nested-root rejection.
+Final native Windows CI remains required; a local macOS pass is not that proof.

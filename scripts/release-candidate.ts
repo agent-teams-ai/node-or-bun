@@ -9,6 +9,7 @@ import {
   readlinkSync,
   realpathSync,
   rmSync,
+  statSync,
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -45,6 +46,7 @@ type Entry = Readonly<{ file: FileLeaf; data: string }>;
 export type ReleaseTree = Readonly<Record<string, Entry>>;
 type Custody = Readonly<{
   root: string;
+  rootIdentity: string;
   gitDirectory: string;
   commonDirectory: string;
   head: string;
@@ -296,7 +298,19 @@ function installationDigest(root: string): string {
 
 function custody(rootInput: string, npmInput: string): Custody {
   const root = realpathSync(rootInput);
-  if (realpathSync(git(root, ["rev-parse", "--show-toplevel"])) !== root) {
+  // Git and Node may spell the same Windows directory differently. Compare
+  // filesystem objects, without folding case on case-sensitive filesystems.
+  const rootStat = statSync(root, { bigint: true });
+  const gitRootStat = statSync(realpathSync(git(root, ["rev-parse", "--show-toplevel"])), {
+    bigint: true,
+  });
+  if (
+    !rootStat.isDirectory() ||
+    !gitRootStat.isDirectory() ||
+    rootStat.ino === 0n ||
+    rootStat.dev !== gitRootStat.dev ||
+    rootStat.ino !== gitRootStat.ino
+  ) {
     throw new Error("Release must run at the actual repository root");
   }
   const origin = git(root, ["remote", "get-url", "origin"]);
@@ -319,6 +333,7 @@ function custody(rootInput: string, npmInput: string): Custody {
   }
   return {
     root,
+    rootIdentity: `${rootStat.dev}:${rootStat.ino}`,
     gitDirectory: realpathSync(git(root, ["rev-parse", "--absolute-git-dir"])),
     commonDirectory: realpathSync(resolve(root, git(root, ["rev-parse", "--git-common-dir"]))),
     head: sha(git(root, ["rev-parse", "HEAD"])),
