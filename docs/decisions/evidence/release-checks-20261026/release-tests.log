@@ -1,0 +1,45 @@
+
+> node-or-bun@0.2.3 test:release
+> node --test tests/release-policy.test.ts tests/release-candidate.test.ts
+
+✔ installed common conformance: direct-dependent-empty-and-unchanged-none (2.859417ms)
+✔ installed common conformance: no-release-with-empty-intent-and-none (0.230375ms)
+✔ installed common conformance: existing-retained-file-consumption (0.503917ms)
+✔ installed common conformance: nested-packages-without-root-manifest (0.938667ms)
+✔ installed common conformance: unclassified-root-manifest (0.440792ms)
+✔ installed common conformance: unknown-input (0.113375ms)
+✔ installed common conformance: stale-config-binding (0.359583ms)
+✔ installed common conformance: hidden-export-change-despite-permission (0.348208ms)
+✔ installed common conformance: exact-planned-version-mismatch (0.373125ms)
+✔ installed common conformance: missing-original-consumption-digest (0.791ms)
+✔ installed common conformance: unlisted-generated-output (0.281834ms)
+✔ installed common conformance: duplicate-direct-link (0.227334ms)
+✔ actual Changesets v3 generates the public root patch, consumes empty intent, then npm synchronizes only root lock versions (13448.047042ms)
+✔ an actual empty-only official plan performs no versioning and retains its intent (7738.57525ms)
+✔ the actual pinned reader excludes source documentation from intents while whole-tree checks protect its bytes (15975.21ms)
+✔ independent whole-tree observation rejects manifest, lock, intent, history, mode and unlisted-output tampering (24652.85325ms)
+✔ working and committed Git trees retain and reject tampering of an actual __proto__ file (14376.546208ms)
+✔ versioning rejects source, config, engine, HEAD and Git-directory changes after planning (11361.609334ms)
+✔ foreign physical roots are rejected and PATH/npm environment cannot replace the captured CLI (18744.093083ms)
+✔ release PR replay derives the exact version and changelog from its independent current base (57510.883ms)
+✔ the genuinely generated 0.2.3 archive is the default installed Node, Bun and Node-in-Bun qualification input (32241.564417ms)
+✔ release rejects unrelated, stale, PR, incomplete or partially green CI (0.903208ms)
+✔ release rejects stale attempt artifacts, expired artifacts and wrong-source archives (0.291666ms)
+✔ a queued docs commit still releases its unpublished source version without rolling latest back (0.34875ms)
+✔ registry errors and malformed metadata cannot be interpreted as package absence (0.13825ms)
+✔ release manifest binds archive bytes and rejects wrong package or unsafe paths (1.19725ms)
+✔ qualification rejects incomplete, cross-run, cross-source and mismatched original/registry evidence (0.515292ms)
+✔ release decoders reject malformed external JSON before policy evaluation (0.290458ms)
+✔ npm pack receipt requires one archive record and a safe filename (0.177292ms)
+✔ development Stack follows a matching exact root pin without qualifying a future engine (16.704ms)
+✔ development Stack rejects noncanonical, duplicate and mismatched declarations (19.219875ms)
+✔ development Stack refuses ancestor, escaped package and escaped public CLI resolution (62.896042ms)
+✔ development Stack refuses malformed doctor identity and required companion observations (6.987416ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 196196.264209

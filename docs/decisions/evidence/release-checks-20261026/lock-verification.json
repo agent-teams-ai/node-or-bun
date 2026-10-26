@@ -1,0 +1,20 @@
+{
+  "comparisonBase": "4611930",
+  "rootVersion": "0.2.3",
+  "wholeParsedLockGraph": "only exact root devDependency and public leaf package added",
+  "unchangedPreviousPackageRecords": 134,
+  "addedPackageRecord": {
+    "version": "0.1.0",
+    "resolved": "https://registry.npmjs.org/@agent-teams/release-checks/-/release-checks-0.1.0.tgz",
+    "integrity": "sha512-bspWdQYc85GCvmR6fFn1wffHk6ZNRlY7ox288X7zN6yfzXbEE+a4WVPa3FU3TCaiZ6e2dqsiutgR3V0gZTPXjw==",
+    "dev": true,
+    "license": "Apache-2.0",
+    "engines": {
+      "node": "^24.18.0 || ^26.0.0",
+      "pnpm": ">=11.17.0 <12"
+    }
+  },
+  "packageManifestUnchanged": true,
+  "releaseWorkflowUnchanged": true,
+  "packageLockSha256": "6a43ae05ce38ac20b34b0fdfbf6d5ec73d551c9744826fdc0c5f9f5bc80b6dba"
+}

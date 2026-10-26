@@ -36,6 +36,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: Set up Node.js 26.11.1
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -53,7 +55,10 @@ jobs:
       - name: Check formatting without writing
         run: npm run format:check
       - name: Reject unsafe release inputs and incomplete CI evidence
-        run: node --test tests/release-policy.test.ts
+        run: npm run test:release
+      - name: Independently replay the current-base release PR
+        if: github.event_name == 'pull_request' && github.head_ref == 'changeset-release/main'
+        run: npm run release:check-pr
       - name: Run shared Node and Bun conformance
         run: npm test
       - name: Run Node adapter suites inside Bun

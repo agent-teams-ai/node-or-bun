@@ -1,0 +1,57 @@
+name: version
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node-or-bun-version
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out the accepted source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 26.11.1
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.11.1
+      - name: Install pinned release tooling
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Inspect the exact official release plan
+        id: plan
+        env:
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
+        run: npm run release:status
+      - name: Configure the existing owner commit identity
+        if: steps.plan.outputs.has_release == 'true'
+        run: |
+          git config --local user.name iliya
+          git config --local user.email iliyazelenkog@gmail.com
+      - name: Generate and check the version branch
+        if: steps.plan.outputs.has_release == 'true'
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          setupGitUser: false
+          createGithubReleases: false
+          version: npm run release:version
+          title: "chore(release): version package"
+          commit: "chore(release): version package"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
+          GIT_AUTHOR_NAME: iliya
+          GIT_AUTHOR_EMAIL: iliyazelenkog@gmail.com
+          GIT_COMMITTER_NAME: iliya
+          GIT_COMMITTER_EMAIL: iliyazelenkog@gmail.com
