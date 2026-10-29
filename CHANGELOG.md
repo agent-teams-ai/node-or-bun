@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.5
+
+### Patch Changes
+
+- b724e6c: Copy only the retained capture prefix within the 4 MiB limit and avoid copying chunks after overflow while continuing to drain and validate the stream.
+  
+  Measure capture grace periods against a monotonic deadline so an early timer callback cannot shorten the natural EOF wait.
+
 ## 0.2.4
 
 ### Patch Changes
