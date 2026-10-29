@@ -7,13 +7,6 @@ export type CaptureRead = {
   readonly normalEof: boolean;
 };
 
-const copyChunk = (value: Uint8Array): Uint8Array => {
-  if (!(value instanceof Uint8Array)) {
-    throw processError("stream", "capture stream yielded a non-byte chunk");
-  }
-  return new Uint8Array(value);
-};
-
 export const concatBytes = (chunks: readonly Uint8Array[], length: number): Uint8Array => {
   const result = new Uint8Array(length);
   let offset = 0;
@@ -48,18 +41,21 @@ export const drainCapture = async (
   let overflow = false;
   try {
     for await (const value of stream) {
-      const chunk = copyChunk(value);
+      if (!(value instanceof Uint8Array)) {
+        throw processError("stream", "capture stream yielded a non-byte chunk");
+      }
+      const remaining = PROCESS_CAPTURE_LIMIT_BYTES - length;
+      const acceptedLength = Math.min(value.byteLength, remaining);
+      // Validate the backing store even when no bytes will be retained.
+      const accepted = new Uint8Array(value.buffer, value.byteOffset, acceptedLength);
       if (overflow) {
         continue;
       }
-      const remaining = PROCESS_CAPTURE_LIMIT_BYTES - length;
-      const accepted =
-        chunk.byteLength <= remaining ? chunk : chunk.subarray(0, Math.max(0, remaining));
-      if (accepted.byteLength > 0) {
-        chunks.push(accepted);
-        length += accepted.byteLength;
+      if (acceptedLength > 0) {
+        chunks.push(new Uint8Array(accepted));
+        length += acceptedLength;
       }
-      if (chunk.byteLength > remaining) {
+      if (value.byteLength > remaining) {
         overflow = true;
         onProblem(processError("output-limit", "captured output exceeded 4 MiB"));
       }

@@ -4,6 +4,7 @@ import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import type { Launch } from "../src/contract.js";
 import { createProcessExecutor } from "../src/executor.js";
@@ -14,6 +15,52 @@ import {
 } from "../src/adapters/node.js";
 
 const nodeExecutable = process.env.NODE_EXECUTABLE ?? process.execPath;
+
+// Detects: a truncated view must not retain a full oversized chunk, and chunks
+// arriving after overflow must not be copied while the stream drains to EOF.
+void test("capture retains only its bounded snapshot of oversized chunks", async () => {
+  const directory = await mkdtemp(join(resolve("sandbox"), "TEST-capture-memory-"));
+  try {
+    const child = spawnSync(
+      nodeExecutable,
+      [fileURLToPath(new URL("./fixtures/capture-memory-fixture.js", import.meta.url))],
+      { cwd: directory, encoding: "utf8", timeout: 5_000, maxBuffer: 16 * 1024 },
+    );
+    assert.equal(child.error, undefined);
+    assert.equal(child.signal, null);
+    assert.equal(child.status, 0, child.stderr);
+    const observed: unknown = JSON.parse(child.stdout);
+    const inputBytes = errorField(observed, "inputBytes");
+    const baseline = errorField(observed, "baseline");
+    assert.equal(inputBytes, 16 * 1024 * 1024);
+    assert.ok(typeof baseline === "number" && baseline >= 16 * 1024 * 1024);
+    const retainedBytes = errorField(observed, "retainedBytes");
+    assert.ok(Array.isArray(retainedBytes));
+    assert.equal(retainedBytes.length, 2);
+    for (const retained of retainedBytes) {
+      assert.ok(
+        typeof retained === "number" && retained >= 0 && retained <= 8 * 1024 * 1024,
+        `capture retained ${String(retained)} excess ArrayBuffer bytes`,
+      );
+    }
+    assert.equal(errorField(observed, "capturedBytes"), 4 * 1024 * 1024);
+    assert.equal(errorField(observed, "snapshotPreserved"), true);
+    assert.equal(errorField(observed, "overflow"), true);
+    assert.equal(errorField(observed, "normalEof"), true);
+    assert.deepEqual(errorField(observed, "problemCodes"), ["output-limit"]);
+    assert.equal(errorField(observed, "bufferSnapshot"), "buffer snapshot");
+    assert.equal(errorField(observed, "bufferOverflow"), false);
+    assert.equal(errorField(observed, "bufferNormalEof"), true);
+    assert.equal(errorField(observed, "bufferProblemCount"), 0);
+    assert.equal(errorField(observed, "detachedCapturedBytes"), 4 * 1024 * 1024);
+    assert.equal(errorField(observed, "detachedOverflow"), true);
+    assert.equal(errorField(observed, "detachedNormalEof"), false);
+    assert.equal(errorField(observed, "detachedProblemCount"), 2);
+    assert.equal(errorField(observed, "detachedLastProblemIsTypeError"), true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 const launchRequest = (directory: string): Launch => ({
   command: nodeExecutable,
