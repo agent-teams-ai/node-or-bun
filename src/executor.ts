@@ -44,9 +44,18 @@ type WaitResult<T> =
   | { readonly status: "timeout" };
 
 const wait = async <T>(promise: Promise<T>, timeoutMs: number): Promise<WaitResult<T>> => {
+  const deadline = performance.now() + timeoutMs;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<WaitResult<T>>((resolve) => {
-    timer = setTimeout(() => resolve({ status: "timeout" }), timeoutMs);
+    const checkDeadline = (): void => {
+      const remaining = deadline - performance.now();
+      if (remaining > 0) {
+        timer = setTimeout(checkDeadline, Math.ceil(remaining));
+        return;
+      }
+      resolve({ status: "timeout" });
+    };
+    timer = setTimeout(checkDeadline, timeoutMs);
   });
   try {
     return await Promise.race([
