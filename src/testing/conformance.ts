@@ -332,8 +332,9 @@ const runArbitrationCases = async (): Promise<void> => {
         pendingSettled?.({ done: true, value: undefined });
       },
     };
-    const started = Date.now();
+    const started = performance.now();
     const error = await expectSyntheticError("cleanup", () => syntheticRun(running, baseRequest));
+    const elapsed = performance.now() - started;
     assert(closeRequested, "mixed capture failure skipped forced native closure");
     assert(error.incompleteCustody, "mixed pending capture claimed release");
     assert(
@@ -346,8 +347,8 @@ const runArbitrationCases = async (): Promise<void> => {
       "mixed pending capture lost the EOF-deadline cause",
     );
     assert(
-      Date.now() - started >= PROCESS_CLEANUP_STEP_MS,
-      "mixed pending capture bypassed the EOF deadline",
+      elapsed >= PROCESS_CLEANUP_STEP_MS,
+      `mixed pending capture bypassed the EOF deadline after ${elapsed} ms`,
     );
   }
 
