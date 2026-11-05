@@ -15,7 +15,11 @@ const main = async (): Promise<void> => {
         JSON.stringify({
           argv: process.argv.slice(2),
           cwd: process.cwd(),
-          env: { EXACT: process.env.EXACT, INHERITED: process.env.INHERITED, PATH: process.env.PATH },
+          env: {
+            EXACT: process.env.EXACT,
+            INHERITED: process.env.INHERITED,
+            PATH: process.env.PATH,
+          },
         }),
       );
       return;

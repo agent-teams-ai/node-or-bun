@@ -461,8 +461,9 @@ export const runProcessRuntimeConformance = async (options: ConformanceOptions):
   const inheritedPath = process.env.PATH;
   if (inheritedPath !== undefined) {
     const inherited = await run(options, "normal", {
-      ...request(options, "echo"),
-      environment: undefined,
+      command: options.command,
+      args: [options.fixturePath, "echo"],
+      cwd: options.workingDirectory,
     });
     assert(
       inherited.stdout.includes(`"PATH":${JSON.stringify(inheritedPath)}`),
