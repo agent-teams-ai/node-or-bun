@@ -7,7 +7,8 @@ import {
   settleWithin,
   withCause,
 } from "../internal/settlement.js";
-import { cleanupDirectChild } from "../internal/termination.js";
+import { copySpawnEnvironment } from "../internal/spawn-environment.js";
+import { cleanupDirectChild, waitForTerminalProof } from "../internal/termination.js";
 
 type BunChild = Bun.Subprocess<"ignore", "pipe", "pipe">;
 
@@ -68,18 +69,7 @@ const observeExit = (child: BunChild): ExitObservation => {
   return {
     exited,
     isTerminal: () => terminal,
-    waitForTerminal: (timeoutMs: number) => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), timeoutMs);
-      });
-      const settled = terminalProof.then(() => true);
-      return Promise.race([settled, timeout]).finally(() => {
-        if (timer !== undefined) {
-          clearTimeout(timer);
-        }
-      });
-    },
+    waitForTerminal: (timeoutMs: number) => waitForTerminalProof(terminalProof, timeoutMs),
   };
 };
 
@@ -212,14 +202,7 @@ const createRunning = (
 };
 
 const defaultAcquire = (request: Launch, retain: BunRetain): void => {
-  const environment: Record<string, string> =
-    request.environment === undefined
-      ? Object.fromEntries(
-          Object.entries(process.env).filter(
-            (entry): entry is [string, string] => entry[1] !== undefined,
-          ),
-        )
-      : { ...request.environment };
+  const environment = copySpawnEnvironment(process.env, request.environment);
   const child = Bun.spawn([request.command, ...request.args], {
     cwd: request.cwd,
     env: environment,
@@ -265,7 +248,7 @@ export const createBunProcessAdapter = (options: BunProcessAdapterOptions = {}):
           )(child, "failed"),
         );
         const closeSettlement = await settleOperation(() =>
-          closeBunCaptureWithin(child, captureOwners),
+          closeBunCapture(child, captureOwners),
         );
         const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
         if (failures.length > 0) {
@@ -342,9 +325,3 @@ const closeBunCapture = async (
   }
 };
 
-const closeBunCaptureWithin = async (
-  child: BunChild,
-  captureOwners: readonly StreamCapture[] = [],
-): Promise<void> => {
-  await closeBunCapture(child, captureOwners);
-};

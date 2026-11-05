@@ -456,6 +456,20 @@ export const runProcessRuntimeConformance = async (options: ConformanceOptions):
   assert(exact.stdout.includes('"EXACT":"yes"'), "exact environment was not passed");
   assert(!exact.stdout.includes("INHERITED"), "supplied environment silently merged");
 
+  // The omitted environment must use the launching adapter's inherited snapshot.
+  // PATH is supplied by the supported test runners, unlike a test-mutated global.
+  const inheritedPath = process.env.PATH;
+  if (inheritedPath !== undefined) {
+    const inherited = await run(options, "normal", {
+      ...request(options, "echo"),
+      environment: undefined,
+    });
+    assert(
+      inherited.stdout.includes(`"PATH":${JSON.stringify(inheritedPath)}`),
+      "omitted environment did not inherit PATH",
+    );
+  }
+
   const mutableArgs = [options.fixturePath, "echo", "snapshot"];
   const mutableEnvironment: Record<string, string> = { EXACT: "snapshot" };
   Object.defineProperty(mutableEnvironment, "__proto__", {
