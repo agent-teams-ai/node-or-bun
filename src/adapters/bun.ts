@@ -247,9 +247,7 @@ export const createBunProcessAdapter = (options: BunProcessAdapterOptions = {}):
             ((target, cleanupCause) => defaultCleanup(target, cleanupCause, observed))
           )(child, "failed"),
         );
-        const closeSettlement = await settleOperation(() =>
-          closeBunCapture(child, captureOwners),
-        );
+        const closeSettlement = await settleOperation(() => closeBunCapture(child, captureOwners));
         const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
         if (failures.length > 0) {
           const cleanupCause =
@@ -324,4 +322,3 @@ const closeBunCapture = async (
       : new AggregateError(failures, "native capture closure failed");
   }
 };
-
