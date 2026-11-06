@@ -3,7 +3,7 @@ import type { Readable } from "node:stream";
 import type { CompletionCause, Exit, Launch, ProcessAdapter, RunningProcess } from "../contract.js";
 import { PROCESS_CLEANUP_STEP_MS } from "../contract.js";
 import { ProcessRuntimeError, processError } from "../errors.js";
-import { rejectedReasons, settleOperation, withCause } from "../internal/settlement.js";
+import { aggregateRejectedSettlements, settleOperation, withCause } from "../internal/settlement.js";
 import { copySpawnEnvironment } from "../internal/spawn-environment.js";
 import { cleanupDirectChild, waitForTerminalProof } from "../internal/termination.js";
 
@@ -221,12 +221,12 @@ export const createNodeProcessAdapter = (
           }
         });
         const closeSettlement = await settleOperation(() => closeNodeCaptureWithin(child));
-        const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
-        if (failures.length > 0) {
-          const cleanupCause =
-            failures.length === 1
-              ? failures[0]
-              : new AggregateError(failures, "cleanup and capture closure both failed");
+        const failure = aggregateRejectedSettlements(
+          [cleanupSettlement, closeSettlement],
+          "cleanup and capture closure both failed",
+        );
+        if (failure !== undefined) {
+          const cleanupCause = failure.reason;
           throw withCause(
             new ProcessRuntimeError("cleanup", "process setup cleanup failed", {
               cause: cleanupCause,

@@ -391,6 +391,21 @@ const runArbitrationCases = async (): Promise<void> => {
     );
   }
 
+  // A single cleanup rejection of undefined must not be read as success.
+  {
+    const running = syntheticRunning(
+      Promise.resolve({ exitCode: 0, signal: null }),
+      syntheticStream(),
+      syntheticStream(),
+      async () => {
+        throw undefined;
+      },
+    );
+    const error = await expectSyntheticError("cleanup", () => syntheticRun(running, baseRequest));
+    assert(error.incompleteCustody, "single undefined cleanup rejection claimed release");
+    assert(error.facts.initiatingCause === "exit", "single cleanup failure lost exit facts");
+  }
+
   // Detects: timeout remains the initiating result after late capture failure.
   {
     const exit = deferred<Exit>();

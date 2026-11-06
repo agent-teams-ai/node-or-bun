@@ -20,7 +20,7 @@ import { classifyProcessOutcome, type InitiatingFailure } from "./internal/class
 import { decodeCapture, drainCapture, type CaptureRead } from "./internal/capture.js";
 import { snapshotRequest } from "./internal/input.js";
 import {
-  rejectedReasons,
+  aggregateRejectedSettlements,
   settleOperation,
   type Settlement,
   withCause,
@@ -301,7 +301,6 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
         }
       };
 
-      let cleanupFailure: { readonly reason: unknown } | undefined;
       const cleanupSettlement = await settleOperation(() =>
         running.cleanup(
           initiatingFailure?.cause === "timeout"
@@ -314,15 +313,10 @@ export const createProcessExecutor = (adapter: ProcessAdapter): ProcessExecutor 
         ),
       );
       const closeSettlement = await settleOperation(() => closeAndSettleCapture());
-      const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
-      if (failures.length > 0) {
-        cleanupFailure = {
-          reason:
-            failures.length === 1
-              ? failures[0]
-              : new AggregateError(failures, "cleanup and capture closure both failed"),
-        };
-      }
+      const cleanupFailure = aggregateRejectedSettlements(
+        [cleanupSettlement, closeSettlement],
+        "cleanup and capture closure both failed",
+      );
 
       if (timer !== undefined) {
         clearTimeout(timer);
