@@ -704,6 +704,20 @@ export const runProcessRuntimeConformance = async (options: ConformanceOptions):
     "cleanup failure did not retain timeout as its initiating problem",
   );
 
+  // Native test hooks must not wait for an exit event that already happened.
+  const cleanupAfterExit = await expectError("cleanup", () =>
+    run(
+      options,
+      "cleanup-failure",
+      request(options, "exit", { args: [options.fixturePath, "exit", "0"] }),
+    ),
+  );
+  assert(cleanupAfterExit.incompleteCustody, "failed post-exit cleanup claimed release");
+  assert(
+    cleanupAfterExit.facts.observedExit?.exitCode === 0,
+    "failed post-exit cleanup lost the observed child exit",
+  );
+
   // Detects: forced closure after the EOF deadline is cleanup failure and
   // retains close-requested, cause and incomplete-custody facts. A descendant
   // inheriting stdio is not a portable retained-pipe oracle:
