@@ -3,7 +3,11 @@ import type { Readable } from "node:stream";
 import type { CompletionCause, Exit, Launch, ProcessAdapter, RunningProcess } from "../contract.js";
 import { PROCESS_CLEANUP_STEP_MS } from "../contract.js";
 import { ProcessRuntimeError, processError } from "../errors.js";
-import { aggregateRejectedSettlements, settleOperation, withCause } from "../internal/settlement.js";
+import {
+  aggregateRejectedSettlements,
+  settleOperation,
+  withCause,
+} from "../internal/settlement.js";
 import { copySpawnEnvironment } from "../internal/spawn-environment.js";
 import { cleanupDirectChild, waitForTerminalProof } from "../internal/termination.js";
 
