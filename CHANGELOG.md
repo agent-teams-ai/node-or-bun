@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6
+
+### Patch Changes
+
+- 43849e8: Deduplicate adapter-neutral spawn-environment copying, terminal-proof waiting, and cleanup-failure aggregation, and remove a redundant Bun close wrapper. Strengthen Node/Bun conformance for inherited environments, undefined cleanup rejections, and already-exited test cleanup without changing the public process contract.
+
 ## 0.2.5
 
 ### Patch Changes
