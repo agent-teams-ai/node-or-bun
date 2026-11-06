@@ -3,8 +3,13 @@ import type { Readable } from "node:stream";
 import type { CompletionCause, Exit, Launch, ProcessAdapter, RunningProcess } from "../contract.js";
 import { PROCESS_CLEANUP_STEP_MS } from "../contract.js";
 import { ProcessRuntimeError, processError } from "../errors.js";
-import { rejectedReasons, settleOperation, withCause } from "../internal/settlement.js";
-import { cleanupDirectChild } from "../internal/termination.js";
+import {
+  aggregateRejectedSettlements,
+  settleOperation,
+  withCause,
+} from "../internal/settlement.js";
+import { copySpawnEnvironment } from "../internal/spawn-environment.js";
+import { cleanupDirectChild, waitForTerminalProof } from "../internal/termination.js";
 
 export type NodeRetain = (child: ChildProcess) => void;
 export type NodeAcquireHook = (request: Launch, retain: NodeRetain) => void;
@@ -64,18 +69,7 @@ const observeExit = (child: ChildProcess): ExitObservation => {
     exited,
     isTerminal: () => terminal,
     hasPid: () => child.pid !== undefined,
-    waitForTerminal: (timeoutMs: number) => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), timeoutMs);
-      });
-      const settled = terminalProof.then(() => true);
-      return Promise.race([settled, timeout]).finally(() => {
-        if (timer !== undefined) {
-          clearTimeout(timer);
-        }
-      });
-    },
+    waitForTerminal: (timeoutMs: number) => waitForTerminalProof(terminalProof, timeoutMs),
   };
 };
 
@@ -182,14 +176,7 @@ const createRunning = (
 };
 
 const defaultAcquire = (request: Launch, retain: NodeRetain): void => {
-  const environment: Record<string, string> =
-    request.environment === undefined
-      ? Object.fromEntries(
-          Object.entries(process.env).filter(
-            (entry): entry is [string, string] => entry[1] !== undefined,
-          ),
-        )
-      : { ...request.environment };
+  const environment = copySpawnEnvironment(process.env, request.environment);
   const child = spawn(request.command, [...request.args], {
     cwd: request.cwd,
     env: environment,
@@ -238,12 +225,12 @@ export const createNodeProcessAdapter = (
           }
         });
         const closeSettlement = await settleOperation(() => closeNodeCaptureWithin(child));
-        const failures = rejectedReasons([cleanupSettlement, closeSettlement]);
-        if (failures.length > 0) {
-          const cleanupCause =
-            failures.length === 1
-              ? failures[0]
-              : new AggregateError(failures, "cleanup and capture closure both failed");
+        const failure = aggregateRejectedSettlements(
+          [cleanupSettlement, closeSettlement],
+          "cleanup and capture closure both failed",
+        );
+        if (failure !== undefined) {
+          const cleanupCause = failure.reason;
           throw withCause(
             new ProcessRuntimeError("cleanup", "process setup cleanup failed", {
               cause: cleanupCause,

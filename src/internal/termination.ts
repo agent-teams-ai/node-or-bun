@@ -31,3 +31,19 @@ export const cleanupDirectChild = async ({
   }
   throw processError("cleanup", "direct child terminal observation timed out");
 };
+
+/** Wait only on the native adapter's established terminal proof. */
+export const waitForTerminalProof = (
+  terminalProof: Promise<void>,
+  timeoutMs: number,
+): Promise<boolean> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(false), timeoutMs);
+  });
+  return Promise.race([terminalProof.then(() => true), timeout]).finally(() => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  });
+};

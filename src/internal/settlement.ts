@@ -44,6 +44,18 @@ export const rejectedReasons = (settlements: readonly Settlement<unknown>[]): un
     settlement.status === "rejected" ? [settlement.reason] : [],
   );
 
+/** Preserve a rejected undefined as a failure, distinct from no rejection. */
+export const aggregateRejectedSettlements = (
+  settlements: readonly Settlement<unknown>[],
+  message: string,
+): { readonly reason: unknown } | undefined => {
+  const reasons = rejectedReasons(settlements);
+  if (reasons.length === 0) {
+    return undefined;
+  }
+  return { reason: reasons.length === 1 ? reasons[0] : new AggregateError(reasons, message) };
+};
+
 export const withCause = <T extends object>(error: T, cause: unknown): T => {
   Object.defineProperty(error, "cause", {
     value: cause,

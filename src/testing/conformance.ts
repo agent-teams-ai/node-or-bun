@@ -391,6 +391,21 @@ const runArbitrationCases = async (): Promise<void> => {
     );
   }
 
+  // A single cleanup rejection of undefined must not be read as success.
+  {
+    const running = syntheticRunning(
+      Promise.resolve({ exitCode: 0, signal: null }),
+      syntheticStream(),
+      syntheticStream(),
+      async () => {
+        throw undefined;
+      },
+    );
+    const error = await expectSyntheticError("cleanup", () => syntheticRun(running, baseRequest));
+    assert(error.incompleteCustody, "single undefined cleanup rejection claimed release");
+    assert(error.facts.initiatingCause === "exit", "single cleanup failure lost exit facts");
+  }
+
   // Detects: timeout remains the initiating result after late capture failure.
   {
     const exit = deferred<Exit>();
@@ -455,6 +470,21 @@ export const runProcessRuntimeConformance = async (options: ConformanceOptions):
   );
   assert(exact.stdout.includes('"EXACT":"yes"'), "exact environment was not passed");
   assert(!exact.stdout.includes("INHERITED"), "supplied environment silently merged");
+
+  // The omitted environment must use the launching adapter's inherited snapshot.
+  // PATH is supplied by the supported test runners, unlike a test-mutated global.
+  const inheritedPath = process.env.PATH;
+  if (inheritedPath !== undefined) {
+    const inherited = await run(options, "normal", {
+      command: options.command,
+      args: [options.fixturePath, "echo"],
+      cwd: options.workingDirectory,
+    });
+    assert(
+      inherited.stdout.includes(`"PATH":${JSON.stringify(inheritedPath)}`),
+      "omitted environment did not inherit PATH",
+    );
+  }
 
   const mutableArgs = [options.fixturePath, "echo", "snapshot"];
   const mutableEnvironment: Record<string, string> = { EXACT: "snapshot" };
@@ -672,6 +702,20 @@ export const runProcessRuntimeConformance = async (options: ConformanceOptions):
     isProcessRuntimeError(cleanupFailure.initiatingError) &&
       cleanupFailure.initiatingError.code === "timeout",
     "cleanup failure did not retain timeout as its initiating problem",
+  );
+
+  // Native test hooks must not wait for an exit event that already happened.
+  const cleanupAfterExit = await expectError("cleanup", () =>
+    run(
+      options,
+      "cleanup-failure",
+      request(options, "exit", { args: [options.fixturePath, "exit", "0"] }),
+    ),
+  );
+  assert(cleanupAfterExit.incompleteCustody, "failed post-exit cleanup claimed release");
+  assert(
+    cleanupAfterExit.facts.observedExit?.exitCode === 0,
+    "failed post-exit cleanup lost the observed child exit",
   );
 
   // Detects: forced closure after the EOF deadline is cleanup failure and

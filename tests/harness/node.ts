@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { resolve } from "node:path";
 import type {
   ConformanceAdapterFactory,
@@ -7,10 +8,13 @@ import type {
 import { createNodeProcessAdapter, type NodeCleanupHook } from "../../src/adapters/node.js";
 
 const killAndAwait: NodeCleanupHook = async (child) => {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  // Subscribe before sending the signal: exit can otherwise race the listener.
+  const exited = once(child, "exit");
   child.kill("SIGKILL");
-  await new Promise<void>((_resolve) => {
-    child.once("exit", () => _resolve());
-  });
+  await exited;
 };
 
 export const createNodeAdapterFactory: ConformanceAdapterFactory = (mode) => {
