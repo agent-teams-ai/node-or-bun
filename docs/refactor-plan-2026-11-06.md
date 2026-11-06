@@ -132,3 +132,21 @@ These are **adversarial analytical passes**, not a claim that separately hosted 
 | Quality | Strict TS, lint, format, technical review | Unsupported implementation or unresolved finding |
 
 The plan is deliberately cancellable slice-by-slice: if a proposed extraction is not demonstrably simpler **and** equivalently safe, skip it. Do not broaden scope to reach the user’s stated line-count estimate.
+
+## 8. Owner-authorized narrow follow-up — error aggregation (2026-11-06)
+
+The owner subsequently requested additional cautious refactoring and improvement, without speculative changes. This appendix is an explicit **scope amendment before its implementation**. All earlier exclusions remain in force, except the deliberate narrow internal change described here.
+
+**Verified duplication:** three existing sites — `src/executor.ts`, `src/adapters/node.ts` rollback, and `src/adapters/bun.ts` rollback — independently turn exactly two `Settlement<unknown>` values into either no failure, a single rejection reason, or `AggregateError(reasons, "cleanup and capture closure both failed")`. The same internal `rejectedReasons` already extracts rejections. These sites should not diverge in future error precedence.
+
+**One narrow improvement:** add one pure, private helper in the existing `src/internal/settlement.ts` that returns **a reason-bearing object or `undefined` to indicate absence of any rejected settlement**. Preserve `{ reason: undefined }` for an actual rejection of `undefined`. Replace exactly those three duplicated reductions, retaining separate native operations, exception wrapping and custody authority.
+
+**Do not:** migrate rollback orchestration, change error messages, add a new package/module hierarchy, change deadline policy, modify release tooling, normalize rejected `undefined` to a fabricated Error, or alter the number/order of cleanup operations.
+
+**Critique A — lifecycle:** reducing all native rollback to one shared function would conceal OS-specific custody. Rejected; share *only* the already-identical pure reduction after native cleanup has settled.
+
+**Critique B — failure fidelity:** using truthy/falsy tests on an aggregated reason would drop a genuine rejection of `undefined`. Therefore the helper distinguishes no rejected settlement from a rejected settlement containing `undefined`, and the conformance suite gains a single-failure sentinel case. The existing dual-failure case must also pass.
+
+**Critique C — API and test cost:** the helper is internal and not part of `./testing` or package root exports. No new dependencies or release scripts are justified. One shared conformance regression is sufficient; every platform will exercise it without triplicating test harnesses.
+
+**Acceptance:** all prior CI/review gates plus proof that single/double rejection order, initiating-cause precedence, `incompleteCustody`, and existing native setup rollback behavior remain unchanged. If the abstraction produces more code or weakens evidence, revert this follow-up instead of extending scope.
