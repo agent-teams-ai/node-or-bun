@@ -150,3 +150,15 @@ The owner subsequently requested additional cautious refactoring and improvement
 **Critique C — API and test cost:** the helper is internal and not part of `./testing` or package root exports. No new dependencies or release scripts are justified. One shared conformance regression is sufficient; every platform will exercise it without triplicating test harnesses.
 
 **Acceptance:** all prior CI/review gates plus proof that single/double rejection order, initiating-cause precedence, `incompleteCustody`, and existing native setup rollback behavior remain unchanged. If the abstraction produces more code or weakens evidence, revert this follow-up instead of extending scope.
+
+## 9. Follow-up test harness race — regression-only repair
+
+**Evidence:** `tests/harness/node.ts` currently calls `child.kill("SIGKILL")` and only then registers `child.once("exit", ...)`. Its `cleanup-failure` conformance adapter is invoked even after a successful natural child exit, so a cleanup hook for an already-exited child can wait forever for an event that has happened. This is a test-harness reliability defect, not a reason to redesign the production adapter.
+
+**Bounded repair:** in that Node-only TEST hook, check for existing `exitCode` / `signalCode` terminal proof; otherwise register `node:events.once(child, "exit")` **before** kill and await it. The native adapter's production `observeExit` and cleanup remain unchanged. Add one shared Node/Bun conformance case: a naturally exited child whose custom cleanup deliberately fails must settle with honest `cleanup`, not hang. Do not add timers, retries, a general process watcher or a new test abstraction.
+
+**Critic (runtime):** Is this covering up production cleanup? No. It is correcting the synthetic `cleanup-failure` hook's own event ordering. Production's direct-child and managed-custody contracts remain separately tested.
+
+**Critic (platform):** Does it assume POSIX SIGKILL? The existing harness already uses SIGKILL in Node and Bun and is qualified on the repository's Windows runner. The new test checks *already-completed* cleanup, for which the Node hook correctly skips the kill.
+
+**Critic (scope):** There is no need to migrate every native fixture or cleanup helper; only the exact susceptible hook is in scope. If cross-platform evidence conflicts, drop/rework this test-only change without widening production behavior.
