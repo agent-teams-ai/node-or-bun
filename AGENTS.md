@@ -1,5 +1,7 @@
 # Agent instructions
 
+Use the [documentation map](docs/README.md) to select the relevant contract, decision, migration or evidence.
+
 This repository owns a production-importable process mechanism. It must not
 depend at runtime on Engineering Foundation, Stack Toolchain, Electron, or consumer
 business policy. Stack Toolchain is permitted only as an exact development dependency

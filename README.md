@@ -129,3 +129,5 @@ selected source paths. Runtime-specific types remain in this repository.
 `npm run check` retains adapter conformance, native lifecycle, packaging and
 installed-consumer qualification. The published library has no Toolchain or
 Engineering Foundation runtime dependency.
+
+See the [documentation map](docs/README.md) for task-oriented navigation.
